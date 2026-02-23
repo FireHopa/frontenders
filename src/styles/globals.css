@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Radius */
+    --radius: 1rem;
+
+    /* Light */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* shadcn primary */
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 217 91% 60%;
+
+    /* Google-inspired accents (not carnival) */
+    --g-blue: 217 91% 60%;
+    --g-red: 0 84% 60%;
+    --g-yellow: 45 93% 58%;
+    --g-green: 142 72% 45%;
+
+    /* Premium surfaces */
+    --glass-bg: 0 0% 100% / 0.6;
+    --glass-border: 214.3 31.8% 91.4% / 0.7;
+
+    /* Shadows */
+    --shadow-soft: 0 10px 30px -20px rgba(0,0,0,0.25);
+    --shadow-card: 0 18px 45px -25px rgba(0,0,0,0.35);
+
+    /* Micro-gradients */
+    --grad-surface: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.65));
+    --grad-hero: radial-gradient(1200px circle at 15% 10%, rgba(66,133,244,0.18), transparent 45%),
+                 radial-gradient(900px circle at 85% 20%, rgba(52,168,83,0.14), transparent 45%),
+                 radial-gradient(900px circle at 50% 95%, rgba(251,188,5,0.10), transparent 45%),
+                 radial-gradient(700px circle at 20% 70%, rgba(234,67,53,0.08), transparent 40%);
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 6%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 5%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 18% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 18% 16%;
+    --muted-foreground: 215 20% 70%;
+
+    --accent: 217 18% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 40.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 18% 18%;
+    --input: 217 18% 18%;
+    --ring: 217 91% 60%;
+
+    --glass-bg: 222 20% 10% / 0.55;
+    --glass-border: 217 18% 25% / 0.65;
+
+    --shadow-soft: 0 10px 30px -20px rgba(0,0,0,0.6);
+    --shadow-card: 0 18px 45px -25px rgba(0,0,0,0.7);
+
+    --grad-surface: linear-gradient(180deg, rgba(18,18,20,0.85), rgba(18,18,20,0.55));
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; }
+}
+
+/* Premium utility classes */
+@layer utilities {
+  .glass {
+    background: hsl(var(--glass-bg));
+    border: 1px solid hsl(var(--glass-border));
+    backdrop-filter: blur(12px);
+  }
+  .glass-hover { @apply transition; }
+  .glass-hover:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); }
+  .focus-ring { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background; }
+}
+
+
+/* Focus Mode */
+.focus-mode header, .focus-mode nav { display: none; }
