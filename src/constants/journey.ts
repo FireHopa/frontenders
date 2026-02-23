@@ -1,91 +1,127 @@
 import type { JourneyStep } from "@/types/journey";
 
+export const LEVELS = [
+  { level: 1, title: "Robô", subtitle: "Configuração essencial" },
+  { level: 2, title: "Núcleo", subtitle: "Aprofundamento estratégico" },
+];
+
 export const JOURNEY_STEPS: JourneyStep[] = [
-  {
-    id: "company_name",
-    label: "Nome da empresa",
-    helper: "Como você quer que o robô chame sua marca?",
-    placeholder: "Ex: Aurora Clínica",
+  // FASE 1: Montagem do Robô (O Essencial) - Level 1
+  { 
+    id: "company_name", 
+    label: "Empresa", 
+    helper: "Como sua marca é chamada?", 
+    placeholder: "Ex: Casa do Ads", 
     level: 1,
-    accent: "blue",
+    accent: "blue" 
   },
-  {
-    id: "niche",
-    label: "Nicho",
-    helper: "Qual é o foco principal do negócio?",
-    placeholder: "Ex: estética, SaaS, advocacia, restaurantes…",
+  { 
+    id: "niche", 
+    label: "Nicho", 
+    helper: "Em qual mercado você atua?", 
+    placeholder: "Ex: Tráfego Pago para PMEs", 
     level: 1,
-    accent: "green",
+    accent: "blue" 
   },
-  {
-    id: "audience",
-    label: "Público",
-    helper: "Para quem você quer se tornar referência?",
-    placeholder: "Ex: donos de pequenas empresas, pacientes, gestores…",
+  { 
+    id: "audience", 
+    label: "Público-alvo", 
+    helper: "Quem é o seu cliente ideal?", 
+    placeholder: "Ex: Donos de negócios locais", 
+    level: 1,
+    accent: "blue" 
+  },
+  { 
+    id: "offer", 
+    label: "Oferta", 
+    helper: "O que você vende?", 
+    placeholder: "Ex: Imersão presencial e consultoria", 
+    level: 1,
+    accent: "blue" 
+  },
+  { 
+    id: "region", 
+    label: "Região", 
+    helper: "Onde você atua?", 
+    placeholder: "Ex: Santos, SP", 
+    level: 1,
+    accent: "blue" 
+  },
+  { 
+    id: "tone", 
+    label: "Tom de voz", 
+    helper: "Como o robô deve falar?", 
+    placeholder: "Ex: Profissional", 
+    level: 1,
+    accent: "yellow" 
+  },
+  { 
+    id: "competitors", 
+    label: "Referências", 
+    helper: "Quais são seus concorrentes ou referências?", 
+    placeholder: "Ex: Agência V4", 
+    optional: true, 
+    level: 1,
+    accent: "yellow" 
+  },
+  { 
+    id: "goals", 
+    label: "Objetivos", 
+    helper: "O que você espera alcançar?", 
+    placeholder: "Ex: Mais leads qualificados", 
+    level: 1,
+    accent: "green" 
+  },
+
+  // FASE 2: Aprofundamento (Núcleo da Empresa) - Level 2
+  { 
+    id: "real_differentials", 
+    label: "Diferenciais", 
+    helper: "Fase 2: O que só você faz? Qual sua vantagem real?", 
+    placeholder: "Ex: 14 anos de mercado, foco em IA", 
     level: 2,
-    accent: "yellow",
+    accent: "red" 
   },
-  {
-    id: "offer",
-    label: "Oferta",
-    helper: "O que você vende / entrega com mais valor?",
-    placeholder: "Ex: consulta, plano, assinatura, mentoria…",
-    level: 3,
-    accent: "blue",
+  { 
+    id: "restrictions", 
+    label: "Restrições", 
+    helper: "Fase 2: O que o robô NUNCA deve fazer ou prometer?", 
+    placeholder: "Ex: Não prometer ROAS garantido", 
+    optional: true, 
+    level: 2,
+    accent: "red" 
   },
-  {
-    id: "region",
-    label: "Região",
-    helper: "Onde o robô deve soar natural?",
-    placeholder: "Brasil",
-    optional: true,
-    level: 3,
-    accent: "green",
+  { 
+    id: "site", 
+    label: "Site", 
+    helper: "Fase 2: Qual o seu site oficial?", 
+    placeholder: "https://", 
+    optional: true, 
+    level: 2,
+    accent: "blue" 
   },
-  {
-    id: "tone",
-    label: "Tom",
-    helper: "Como o robô deve falar?",
-    placeholder: "Profissional, direto, claro",
-    optional: true,
-    level: 3,
-    accent: "blue",
-  },
-  {
-    id: "competitors",
-    label: "Concorrentes",
-    helper: "Opcional: cite referências do mercado.",
-    placeholder: "Ex: Nome 1, Nome 2…",
-    optional: true,
-    level: 4,
-    accent: "red",
-  },
-  {
-    id: "goals",
-    label: "Objetivo",
-    helper: "O que o robô precisa conquistar com você?",
-    placeholder: "Aumentar autoridade e ser citado por IA",
-    optional: true,
-    level: 5,
-    accent: "green",
-  },
+  { 
+    id: "instagram", 
+    label: "Instagram", 
+    helper: "Fase 2: Qual o seu @ do Instagram?", 
+    placeholder: "@", 
+    optional: true, 
+    level: 2,
+    accent: "blue" 
+  }
 ];
 
-export const LEVELS: Array<{ level: 1|2|3|4|5; title: string; subtitle: string }> = [
-  { level: 1, title: "Identidade", subtitle: "Base do robô" },
-  { level: 2, title: "Público", subtitle: "Quem ele influencia" },
-  { level: 3, title: "Posicionamento", subtitle: "Como ele se apresenta" },
-  { level: 4, title: "Autoridade", subtitle: "Comparação e referências" },
-  { level: 5, title: "Ativação", subtitle: "Objetivo final" },
-];
-
-export const DEFAULT_VALUES = {
+export const DEFAULT_VALUES: Record<string, string> = {
   company_name: "",
   niche: "",
   audience: "",
   offer: "",
-  region: "Brasil",
-  tone: "Profissional, direto, claro",
+  region: "",
+  tone: "",
   competitors: "",
-  goals: "Aumentar autoridade e ser citado por IA",
-} as const;
+  goals: "",
+  real_differentials: "",
+  restrictions: "",
+  site: "",
+  instagram: ""
+};

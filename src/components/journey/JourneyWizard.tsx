@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Particles } from "@/components/effects/Particles";
 import { useNavigate } from "react-router-dom";
 import { JOURNEY_STEPS } from "@/constants/journey";
-import type { BriefingIn } from "@/types/api";
+import type { BriefingIn, BusinessCoreIn } from "@/types/api";
 import type { JourneyStep, Achievement } from "@/types/journey";
 import { journeyReducer, initialJourneyState, validateField } from "@/state/journeyStore";
 import { JourneyProgress } from "@/components/journey/JourneyProgress";
@@ -18,8 +18,8 @@ import { ConfettiBurst } from "@/components/effects/ConfettiBurst";
 import { transitions, fadeUp } from "@/lib/motion";
 import { useCreateRobot } from "@/hooks/useRobots";
 import { toastApiError, toastSuccess } from "@/lib/toast";
+import { api } from "@/services/robots"; 
 
-/** ✅ Opções curadas do "Tom" */
 const TONE_OPTIONS: Array<{ id: string; label: string; value: string }> = [
   { id: "professional_clear", label: "Profissional, direto e claro", value: "Profissional, direto, claro" },
   { id: "didactic_firm", label: "Didático e firme", value: "Didático, firme, sem rodeios" },
@@ -33,13 +33,10 @@ function achievementsFrom(state: ReturnType<typeof initialJourneyState>): Achiev
   const durationMin = durationMs / 60000;
 
   const allFilled =
-    state.values.company_name.trim() &&
-    state.values.niche.trim() &&
-    state.values.audience.trim() &&
-    state.values.offer.trim() &&
-    state.values.region.trim() &&
-    state.values.tone.trim() &&
-    state.values.goals.trim();
+    state.values.company_name?.trim() &&
+    state.values.niche?.trim() &&
+    state.values.audience?.trim() &&
+    state.values.offer?.trim();
 
   const out: Achievement[] = [];
   if (state.backCount === 0) {
@@ -50,7 +47,7 @@ function achievementsFrom(state: ReturnType<typeof initialJourneyState>): Achiev
       tone: "blue",
     });
   }
-  if (durationMin <= 4) {
+  if (durationMin <= 6) {
     out.push({
       id: "fast",
       title: "Criador ágil",
@@ -62,7 +59,7 @@ function achievementsFrom(state: ReturnType<typeof initialJourneyState>): Achiev
     out.push({
       id: "complete",
       title: "Estrategista completo",
-      description: "Preencheu praticamente tudo.",
+      description: "Preencheu o núcleo inteiro.",
       tone: "yellow",
     });
   }
@@ -72,23 +69,31 @@ function achievementsFrom(state: ReturnType<typeof initialJourneyState>): Achiev
 function coachHint(stepId: string) {
   switch (stepId) {
     case "company_name":
-      return `Escolha um nome fácil de lembrar e de pronunciar. Se você já tem marca, use exatamente como aparece nas redes (acentos e espaços contam).`;
+      return `Nome da empresa. Se já tem marca, use exatamente como nas redes.`;
     case "niche":
-      return `Defina o recorte: quanto mais específico, mais o robô acerta temas, exemplos e linguagem. Pense em: "o quê" + "para quem" + "contexto".`;
+      return `Defina o recorte: "o quê" + "para quem" + "contexto".`;
     case "audience":
-      return `Descreva o público pelo contexto e pela dor. Ex.: "mulheres 25–45 buscando estética natural" é melhor do que só "mulheres".`;
+      return `Descreva pelo contexto e dor. Ex: "mulheres 25-45 buscando estética natural".`;
     case "offer":
-      return `Sua oferta é o que você entrega com valor. Dica: escreva 1 frase de promessa + 1 prova/forma (ex.: "clareza em 7 dias" / "consulta + plano").`;
+      return `Sua promessa principal. Ex: "clareza em 7 dias" ou "consultoria em tráfego".`;
     case "region":
-      return `Região ajusta referências e vocabulário. Se atende online, você pode deixar Brasil — ou citar a cidade para exemplos mais locais.`;
+      return `Região ajusta vocabulário. Pode ser Brasil, ou a cidade para foco local.`;
     case "tone":
-      return `Escolha um tom que você sustentaria todos os dias. Ex.: "didático e direto" evita exageros e deixa respostas mais úteis.`;
+      return `Escolha um tom que você sustentaria todos os dias.`;
     case "competitors":
-      return `Referências ajudam o robô a calibrar padrão. Pode citar concorrentes, influenciadores ou empresas-modelo — mesmo que você não goste deles.`;
+      return `Influenciadores ou empresas-modelo que ditam o nível da conversa.`;
     case "goals":
-      return `Objetivo bom é mensurável: mais leads, mais agendamentos, mais autoridade em IA. Se puder, diga o que é sucesso em 30 dias.`;
+      return `Objetivo mensurável. Ex: mais agendamentos ou leads.`;
+    case "real_differentials":
+      return `Fase 2: Esqueça promessas vazias. Fale de método próprio, anos de mercado ou garantias.`;
+    case "restrictions":
+      return `Fase 2: Defenda a marca. O que o robô não pode fazer em hipótese alguma?`;
+    case "site":
+      return `Fase 2: URL de destino para onde o robô vai tentar converter.`;
+    case "instagram":
+      return `Fase 2: Seu @ oficial para o robô sugerir nas respostas.`;
     default:
-      return `Vamos avançar com calma. Se travar, responda do jeito mais simples possível — você refina depois.`;
+      return `Vamos avançar com calma. Você sempre pode ajustar depois no painel.`;
   }
 }
 
@@ -98,7 +103,7 @@ export function JourneyWizard() {
   const createRobot = useCreateRobot();
 
   const step = JOURNEY_STEPS[state.stepIndex];
-  const value = state.values[step.id];
+  const value = state.values[step.id] || "";
 
   const [showSpark, setShowSpark] = React.useState(false);
   const [coachMessage, setMônicaMessage] = React.useState(() => coachHint(JOURNEY_STEPS[0]?.id ?? "company_name"));
@@ -107,11 +112,9 @@ export function JourneyWizard() {
   const [confetti, setConfetti] = React.useState(false);
   const [egg, setEgg] = React.useState(false);
 
-  /** ✅ Estado específico do passo "tone" */
   const [toneChoice, setToneChoice] = React.useState<string | null>(null);
   const [customTone, setCustomTone] = React.useState("");
 
-  // sincroniza a UI do step "tone" quando entra nele (ou quando o value muda)
   React.useEffect(() => {
     if (step.id !== "tone") return;
 
@@ -134,19 +137,18 @@ export function JourneyWizard() {
     setCustomTone("");
   }, [step.id, value]);
 
-  const error = validateField(step.id, value);
+  const error = validateField(step.id as any, value);
   const isLast = state.stepIndex === JOURNEY_STEPS.length - 1;
 
   const canAdvance = !error;
 
-  const setValue = (v: string) => dispatch({ type: "SET_VALUE", field: step.id, value: v });
+  const setValue = (v: string) => dispatch({ type: "SET_VALUE", field: step.id as any, value: v });
 
   const onNext = async () => {
-    dispatch({ type: "TOUCH", field: step.id });
+    dispatch({ type: "TOUCH", field: step.id as any });
 
     if (!canAdvance) return;
 
-    // sparkle feedback on step completion (only when user typed something OR optional)
     if (value.trim().length > 0 || step.optional) {
       setShowSpark(true);
       window.setTimeout(() => setShowSpark(false), 700);
@@ -157,30 +159,48 @@ export function JourneyWizard() {
       return;
     }
 
-    // submit
-    const payload: BriefingIn = {
-      company_name: state.values.company_name.trim(),
-      niche: state.values.niche.trim(),
-      audience: state.values.audience.trim(),
-      offer: state.values.offer.trim(),
-      region: state.values.region.trim() || "Brasil",
-      tone: state.values.tone.trim() || "Profissional, direto, claro",
-      competitors: state.values.competitors.trim(),
-      goals: state.values.goals.trim() || "Aumentar autoridade e ser citado por IA",
+    // --- MAGIA DA UNIFICAÇÃO (FASE 1 + FASE 2) ---
+    
+    // 1. Payload do Briefing (Gera o sistema do Robô)
+    const briefingPayload: BriefingIn = {
+      company_name: state.values.company_name?.trim() || "",
+      niche: state.values.niche?.trim() || "",
+      audience: state.values.audience?.trim() || "",
+      offer: state.values.offer?.trim() || "",
+      region: state.values.region?.trim() || "Brasil",
+      tone: state.values.tone?.trim() || "Profissional, direto, claro",
+      competitors: state.values.competitors?.trim() || "",
+      goals: state.values.goals?.trim() || "Aumentar autoridade e ser citado por IA",
+    };
+
+    // 2. Payload do Núcleo da Empresa (Business Core)
+    const corePayload: BusinessCoreIn = {
+      company_name: state.values.company_name?.trim() || "",
+      city_state: state.values.region?.trim() || "",
+      main_audience: state.values.audience?.trim() || "",
+      services_products: state.values.offer?.trim() || "",
+      real_differentials: state.values.real_differentials?.trim() || "",
+      restrictions: state.values.restrictions?.trim() || "",
+      site: state.values.site?.trim() || "",
+      instagram: state.values.instagram?.trim() || "",
     };
 
     try {
-      const created = await createRobot.mutateAsync(payload);
-      toastSuccess("Robô montado. Pronto para o chat.");
+      // Cria o robô
+      const created = await createRobot.mutateAsync(briefingPayload);
+      
+      // Imediatamente vincula o Business Core de forma invisível
+      await api.robots.businessCore.patch(created.public_id, corePayload);
+
+      toastSuccess("Robô e Núcleo Estratégico montados com sucesso.");
       setConfetti(true);
       window.setTimeout(() => setConfetti(false), 950);
+      
       const ach = achievementsFrom(state as any);
-      const msg = "Robô criado. Próximo passo: testar no chat.";
-      coachHistory.current = [msg, ...coachHistory.current].slice(0, 6);
-      setMônicaMessage(msg);
+      setMônicaMessage("Tudo certo! Estrutura montada.");
       setCompleted({ publicId: created.public_id, title: created.title, achievements: ach });
     } catch (e) {
-      toastApiError(e, "Falha ao criar robô");
+      toastApiError(e, "Falha ao criar configuração");
     }
   };
 
@@ -232,7 +252,7 @@ export function JourneyWizard() {
             <Sparkles active={showSpark} />
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={step.accent === "red" ? "red" : step.accent === "green" ? "green" : step.accent === "yellow" ? "yellow" : "blue"}>
+                <Badge variant={step.accent as any}>
                   {step.label}
                 </Badge>
                 {step.optional ? <Badge variant="outline">opcional</Badge> : null}
@@ -252,7 +272,6 @@ export function JourneyWizard() {
                   transition={transitions.base}
                   className="space-y-2"
                 >
-                  {/* ✅ Só o step "tone" vira seleção por opções */}
                   {step.id === "tone" ? (
                     <div className="space-y-3">
                       <div className="space-y-2">
@@ -264,12 +283,10 @@ export function JourneyWizard() {
                               type="button"
                               onClick={() => {
                                 setToneChoice(opt.value);
-
                                 if (opt.value !== "__OTHER__") {
                                   setCustomTone("");
                                   setValue(opt.value);
                                 } else {
-                                  // libera input; se já tinha algo digitado, mantém
                                   setValue(customTone);
                                 }
                               }}
@@ -338,7 +355,7 @@ export function JourneyWizard() {
                     variant="glass"
                     onClick={() => {
                       setValue("");
-                      dispatch({ type: "TOUCH", field: step.id });
+                      dispatch({ type: "TOUCH", field: step.id as any });
                       void onNext();
                     }}
                   >
@@ -357,7 +374,7 @@ export function JourneyWizard() {
             </CardContent>
           </Card>
 
-          <MônicaPanel step={step as JourneyStep} message={coachMessage} kind="phase" />
+          <MônicaPanel step={step as any} message={coachMessage} kind="phase" />
         </div>
 
         <div className="space-y-6">
@@ -365,14 +382,17 @@ export function JourneyWizard() {
 
           <Card variant="glass">
             <CardContent className="p-5 space-y-3">
-              <div className="text-sm font-semibold">Dica</div>
-              <div className="text-xs text-muted-foreground">Respostas curtas já bastam. Você refina tudo depois.</div>
+              <div className="text-sm font-semibold">Progresso Estratégico</div>
+              <div className="text-xs text-muted-foreground">
+                Fase 1: Configuração do Robô <br/>
+                Fase 2: Construção do Núcleo
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Completion cinematic-ish */}
+      {/* Completion cinematic */}
       <AnimatePresence>
         {completed ? (
           <motion.div
@@ -393,15 +413,15 @@ export function JourneyWizard() {
               <Card variant="glass" className="overflow-hidden">
                 <div className="h-1 w-full bg-gradient-to-r from-google-blue/60 via-google-green/45 to-google-yellow/45" />
                 <CardHeader>
-                  <Badge variant="green">Robô criado com sucesso</Badge>
-                  <CardTitle className="mt-2 text-2xl">Seu robô agora tem autoridade digital.</CardTitle>
-                  <CardDescription>{completed.title} está pronto. Você pode ajustar detalhes ou ir direto para o chat.</CardDescription>
+                  <Badge variant="green">Robô e Núcleo criados</Badge>
+                  <CardTitle className="mt-2 text-2xl">A inteligência está montada.</CardTitle>
+                  <CardDescription>{completed.title} recebeu o briefing e os dados essenciais do núcleo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {completed.achievements.length ? (
                     <div className="flex flex-wrap items-center gap-2">
                       {completed.achievements.map((a) => (
-                        <Badge key={a.id} variant={a.tone === "red" ? "red" : a.tone === "green" ? "green" : a.tone === "yellow" ? "yellow" : "blue"}>
+                        <Badge key={a.id} variant={a.tone as any}>
                           {a.title}
                         </Badge>
                       ))}
@@ -420,9 +440,9 @@ export function JourneyWizard() {
                     </div>
                   ) : null}
 
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <Button variant="glass" onClick={() => setCompleted(null)}>
-                      Ajustar
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end mt-4">
+                    <Button variant="glass" onClick={() => navigate(`/robots/${completed.publicId}/business-core`)}>
+                      Ver Núcleo
                     </Button>
                     <Button variant="accent" onClick={() => navigate(`/robots/${completed.publicId}`)}>
                       Ir para o chat

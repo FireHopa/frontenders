@@ -74,14 +74,15 @@ export const api = {
     },
 
     // Agentes de autoridade ligados a um robô (página AuthorityAgentsRobotPage)
+// Na seção 'authorityAgents' dentro de 'api.robots', altere o método 'run':
     authorityAgents: {
-      // cooldown por agente (1h). Se seu backend não expõe, trate como 0.
       cooldown: (publicId: string, agentKey: string) =>
         http<{ cooldown_seconds: number }>(
           `/api/robots/${publicId}/authority-agents/cooldown?agent_key=${encodeURIComponent(agentKey)}`
         ),
-      run: (publicId: string, agentKey: string, body: AuthorityAgentRunRequest) =>
-        http<AuthorityAgentRunResponse>(`/api/robots/${publicId}/authority-agents/run/${encodeURIComponent(agentKey)}` , {
+      // Removido o agentKey da URL, pois o backend espera receber via Body (AuthorityAgentRunIn)
+      run: (publicId: string, body: AuthorityAgentRunRequest) =>
+        http<AuthorityAgentRunItem>(`/api/robots/${publicId}/authority-agents/run`, {
           method: "POST",
           json: body,
         }),

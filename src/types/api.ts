@@ -80,10 +80,12 @@ export interface AuthorityAssistantOut {
 
 export interface AuthorityEditOut {
   id: number;
-  change: string;
-  why: string;
-  signature: string;
   created_at: string;
+  user_message: string;
+  summary: string;
+  changes_made: Record<string, any>[];
+  before_score: number;
+  after_score: number;
 }
 
 
@@ -134,13 +136,15 @@ export interface BusinessCoreIn {
 }
 
 export interface AuthorityAgentRunRequest {
-  message?: string | null;
+  client_id: string;
+  agent_key: string;
+  nucleus: BusinessCoreIn | Record<string, any>;
 }
 
 export interface AuthorityAgentRunGlobalRequest {
   client_id: string;
   agent_key: string;
-  business_core: BusinessCoreIn;
+  nucleus: BusinessCoreIn;
 }
 
 export interface AuthorityAgentRunResponse {

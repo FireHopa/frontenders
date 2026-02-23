@@ -6,7 +6,11 @@ export type BriefingField =
   | "region"
   | "tone"
   | "competitors"
-  | "goals";
+  | "goals"
+  | "real_differentials"
+  | "restrictions"
+  | "site"
+  | "instagram";
 
 export type JourneyLevel = 1 | 2 | 3 | 4 | 5;
 
