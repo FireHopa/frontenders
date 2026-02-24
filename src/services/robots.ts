@@ -17,10 +17,6 @@ import type {
   AuthorityAgentRunResponse,
 } from "@/types/api";
 
-// Tipos do backend para agentes pré-programados (history/run)
-// O backend atual expõe:
-// - GET  /api/authority-agents/history  -> { items: [...] }
-// - POST /api/authority-agents/run      -> { id, agent_key, output_text, created_at }
 export type AuthorityAgentRunItem = {
   id: number;
   agent_key: string;
@@ -65,22 +61,17 @@ export const api = {
     authorityEdits: (publicId: string) =>
       http<AuthorityEditOut[]>(`/api/robots/${publicId}/authority-edits`),
 
-    // Núcleo do negócio (usado na página AuthorityAgentsRobotPage)
-    // Observação: se o backend não tiver esse endpoint no seu build, ele retorna 404.
     businessCore: {
       get: (publicId: string) => http<BusinessCoreOut>(`/api/robots/${publicId}/business-core`),
       patch: (publicId: string, patch: BusinessCoreIn) =>
         http<BusinessCoreOut>(`/api/robots/${publicId}/business-core`, { method: "PATCH", json: patch }),
     },
 
-    // Agentes de autoridade ligados a um robô (página AuthorityAgentsRobotPage)
-// Na seção 'authorityAgents' dentro de 'api.robots', altere o método 'run':
     authorityAgents: {
       cooldown: (publicId: string, agentKey: string) =>
         http<{ cooldown_seconds: number }>(
           `/api/robots/${publicId}/authority-agents/cooldown?agent_key=${encodeURIComponent(agentKey)}`
         ),
-      // Removido o agentKey da URL, pois o backend espera receber via Body (AuthorityAgentRunIn)
       run: (publicId: string, body: AuthorityAgentRunRequest) =>
         http<AuthorityAgentRunItem>(`/api/robots/${publicId}/authority-agents/run`, {
           method: "POST",
@@ -95,14 +86,12 @@ export const api = {
     },
   },
 
-  // Agentes pré-programados (NÃO dependem de robô)
   authorityAgents: {
     historyGlobal: (clientId: string) =>
       http<AuthorityAgentHistoryOut>(`/api/authority-agents/history?client_id=${encodeURIComponent(clientId)}`),
     runGlobal: (payload: AuthorityAgentRunGlobalIn) =>
       http<AuthorityAgentRunItem>(`/api/authority-agents/run`, { method: "POST", json: payload }),
 
-    // Busca uma execução específica (quando você clica no histórico)
     runById: (clientId: string, runId: number) =>
       http<AuthorityAgentRunItem>(
         `/api/authority-agents/run/${encodeURIComponent(String(runId))}?client_id=${encodeURIComponent(clientId)}`
@@ -120,20 +109,14 @@ export function getClientId(): string {
   return v;
 }
 
-// Adicione em src/services/robots.ts
-
 export async function uploadRobotKnowledgeFile(publicId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
-
-  // Ajuste a base URL conforme o seu setup (ex: import.meta.env.VITE_API_URL ou client http)
   const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  
   const response = await fetch(`${baseUrl}/api/robots/${publicId}/upload-knowledge`, {
     method: "POST",
     body: formData,
   });
-
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || "Erro ao fazer upload do arquivo para o robô.");
@@ -144,17 +127,39 @@ export async function uploadRobotKnowledgeFile(publicId: string, file: File) {
 export async function uploadBusinessCoreKnowledgeFile(publicId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
-
   const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
   const response = await fetch(`${baseUrl}/api/robots/${publicId}/business-core/upload-knowledge`, {
     method: "POST",
     body: formData,
   });
-
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || "Erro ao fazer upload do arquivo para o núcleo.");
+  }
+  return response.json();
+}
+
+// NOVAS FUNÇÕES PARA DELETAR
+export async function deleteRobotKnowledgeFile(publicId: string, filename: string) {
+  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const response = await fetch(`${baseUrl}/api/robots/${publicId}/knowledge-files/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || "Erro ao excluir o arquivo do robô.");
+  }
+  return response.json();
+}
+
+export async function deleteBusinessCoreKnowledgeFile(publicId: string, filename: string) {
+  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const response = await fetch(`${baseUrl}/api/robots/${publicId}/business-core/files/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || "Erro ao excluir o arquivo do núcleo.");
   }
   return response.json();
 }

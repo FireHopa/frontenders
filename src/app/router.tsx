@@ -44,6 +44,10 @@ const AuthorityAgentChatPage = withSuspense(
   React.lazy(() => import("@/pages/AuthorityAgentChatPage"))
 );
 
+const AuthorityNucleusPage = withSuspense(
+  React.lazy(() => import("@/pages/AuthorityNucleusPage"))
+);
+
 const NotFoundPage = withSuspense(
   React.lazy(() => import("@/pages/NotFoundPage"))
 );
@@ -65,7 +69,9 @@ export const router = createBrowserRouter([
       { path: "materials", element: <MaterialsPage /> },
       { path: "video", element: <VideoPage /> },
 
+
       { path: "authority-agents", element: <AuthorityAgentsPage /> },
+      { path: "authority-agents/nucleus", element: <AuthorityNucleusPage /> }, // <-- NOVA ROTA AQUI
       { path: "authority-agents/chat/:agentKey", element: <AuthorityAgentChatPage /> },
       { path: "authority-agents/run/:agentKey", element: <AuthorityAgentRunPage /> },
 

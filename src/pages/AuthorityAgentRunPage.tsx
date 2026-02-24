@@ -1,191 +1,62 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import ResultViewer from "@/components/authority/ResultViewer";
+import React, { useState } from "react";
+import { useParams } from "react-router-dom";
+import { Play, Loader2, Copy, FileText, CheckCircle2 } from "lucide-react";
 import { api, getClientId } from "@/services/robots";
+import { AUTHORITY_AGENTS } from "@/constants/authorityAgents";
+import { tasksByAgentKey } from "@/constants/authorityTasks";
+import ResultViewer from "@/components/authority/ResultViewer";
+import { Button } from "@/components/ui/button";
+import { toastSuccess, toastApiError } from "@/lib/toast";
 
-// NOTE: mantém a UX consistente com o dashboard: cards + botões + shadow leve.
-// Esta página:
-// 1) coleta "núcleo do negócio" em passos (wizard)
-// 2) executa o agente
-// 3) mostra resultado bonito + aba "JSON bruto" + ações (copiar / baixar)
+const STORAGE_KEY = "ori_authority_nucleus_v1";
+const COOLDOWNS_KEY = "ori_authority_cooldowns_v1";
 
-type Nucleus = {
-  company_name: string;
-  city_state: string;
-  service_area: "local" | "nacional" | "não informado";
-  main_audience: string;
-  services_or_products: string;
-  real_differentials: string;
-  restrictions: string;
-
-  social_reviews: string;
-  social_testimonials: string;
-  reusable_links_texts: string;
-  cannot_publish: string;
-
-  site: string;
-  google_business_profile: string;
-  instagram: string;
-  linkedin: string;
-  youtube: string;
-  tiktok: string;
-};
-
-const EMPTY: Nucleus = {
-  company_name: "",
-  city_state: "",
-  service_area: "não informado",
-  main_audience: "",
-  services_or_products: "",
-  real_differentials: "",
-  restrictions: "",
-
-  social_reviews: "",
-  social_testimonials: "",
-  reusable_links_texts: "",
-  cannot_publish: "",
-
-  site: "",
-  google_business_profile: "",
-  instagram: "",
-  linkedin: "",
-  youtube: "",
-  tiktok: "",
-};
-
-const STEPS: Array<{
-  title: string;
-  fields: Array<{ key: keyof Nucleus; label: string; placeholder?: string; multiline?: boolean; options?: string[] }>;
-}> = [
-  {
-    title: "Núcleo do negócio",
-    fields: [
-      { key: "company_name", label: "Nome da empresa", placeholder: "Ex: Casa do ADS" },
-      { key: "city_state", label: "Cidade e estado", placeholder: "Ex: São Paulo - SP" },
-      { key: "service_area", label: "Tipo de atendimento", options: ["local", "nacional", "não informado"] },
-      { key: "main_audience", label: "Público principal", placeholder: "Ex: pequenas e médias empresas" },
-      { key: "services_or_products", label: "Lista de serviços ou produtos", placeholder: "Liste os principais", multiline: true },
-      { key: "real_differentials", label: "Diferenciais reais", placeholder: "O que você faz melhor (sem inventar)", multiline: true },
-      { key: "restrictions", label: "Restrições (o que não pode prometer ou dizer)", multiline: true },
-    ],
-  },
-  {
-    title: "Prova social",
-    fields: [
-      { key: "social_reviews", label: "Possui avaliações? Onde?", placeholder: "Ex: Google / Doctoralia / iFood", multiline: true },
-      { key: "social_testimonials", label: "Possui depoimentos? Onde?", placeholder: "Ex: WhatsApp / Instagram / vídeo", multiline: true },
-      { key: "reusable_links_texts", label: "Links ou textos que podem ser usados", multiline: true },
-      { key: "cannot_publish", label: "O que não pode ser publicado", multiline: true },
-    ],
-  },
-  {
-    title: "Plataformas",
-    fields: [
-      { key: "site", label: "Site", placeholder: "URL ou 'não informado'", multiline: true },
-      { key: "google_business_profile", label: "Perfil de Empresa no Google", placeholder: "URL ou 'não informado'", multiline: true },
-      { key: "instagram", label: "Instagram", placeholder: "@ ou URL", multiline: true },
-      { key: "linkedin", label: "LinkedIn", placeholder: "URL", multiline: true },
-      { key: "youtube", label: "YouTube", placeholder: "URL", multiline: true },
-      { key: "tiktok", label: "TikTok", placeholder: "URL", multiline: true },
-    ],
-  },
-];
-
-function ensureValue(v: string) {
-  const t = (v || "").trim();
-  return t ? t : "não informado";
+function saveCooldown(agentKey: string, seconds: number) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(COOLDOWNS_KEY) || "{}");
+    stored[agentKey] = Date.now() + seconds * 1000;
+    localStorage.setItem(COOLDOWNS_KEY, JSON.stringify(stored));
+  } catch {}
 }
 
 export default function AuthorityAgentRunPage() {
-  const nav = useNavigate();
   const { agentKey } = useParams<{ agentKey: string }>();
-
-  const [step, setStep] = useState(0);
-  const [nucleus, setNucleus] = useState<Nucleus>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"visual" | "raw">("visual");
 
-  const canBack = step > 0 && !loading;
-  const canNext = step < STEPS.length - 1 && !loading;
+  const agent = AUTHORITY_AGENTS.find((a) => a.key === agentKey);
+  const tasks = agentKey ? tasksByAgentKey(agentKey) : [];
 
-  const normalizedPayload = useMemo(() => {
-    // Normaliza vazio => "não informado" (regra do produto)
-    return {
-      company_name: ensureValue(nucleus.company_name),
-      city_state: ensureValue(nucleus.city_state),
-      service_area: nucleus.service_area || "não informado",
-      main_audience: ensureValue(nucleus.main_audience),
-      services_or_products: ensureValue(nucleus.services_or_products),
-      real_differentials: ensureValue(nucleus.real_differentials),
-      restrictions: ensureValue(nucleus.restrictions),
-
-      social_reviews: ensureValue(nucleus.social_reviews),
-      social_testimonials: ensureValue(nucleus.social_testimonials),
-      reusable_links_texts: ensureValue(nucleus.reusable_links_texts),
-      cannot_publish: ensureValue(nucleus.cannot_publish),
-
-      site: ensureValue(nucleus.site),
-      google_business_profile: ensureValue(nucleus.google_business_profile),
-      instagram: ensureValue(nucleus.instagram),
-      linkedin: ensureValue(nucleus.linkedin),
-      youtube: ensureValue(nucleus.youtube),
-      tiktok: ensureValue(nucleus.tiktok),
-    };
-  }, [nucleus]);
-
-  async function run() {
-    if (!agentKey) {
-      setErr("Agente inválido.");
-      return;
-    }
-    setErr(null);
+  async function executeTask(taskTitle?: string) {
+    if (!agentKey) return;
     setLoading(true);
+    setResult(null);
+
     try {
-      const clientId = getClientId();
+      const rawNucleus = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      
       const payload = {
-        client_id: clientId,
+        client_id: getClientId(),
         agent_key: agentKey,
-        nucleus: normalizedPayload,
+        nucleus: {
+          ...rawNucleus,
+          ...(taskTitle ? { requested_task: taskTitle } : {})
+        },
       };
+
       const data = await api.authorityAgents.runGlobal(payload);
+      
+      // Salva o cooldown no localStorage para a página principal enxergar
+      const cooldown = (data as any).cooldown_seconds || 3600;
+      saveCooldown(agentKey, cooldown);
+
       setResult(data);
-      setTab("visual");
-      // volta pro topo do resultado
-      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      toastSuccess("Tarefa concluída com sucesso!");
     } catch (e: any) {
-      // backend manda 429 com retry_after_seconds
-      const msg =
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Falha ao executar. Verifique o backend (terminal) e tente novamente.";
-      setErr(String(msg));
+      toastApiError(e, "Falha ao executar agente");
     } finally {
       setLoading(false);
     }
-  }
-
-  function updateField<K extends keyof Nucleus>(key: K, value: string) {
-    setNucleus((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function markNotInformedForStep() {
-    const keys = STEPS[step].fields.map((f) => f.key);
-    setNucleus((prev) => {
-      const next = { ...prev };
-      for (const k of keys) {
-        // @ts-ignore
-        next[k] = "não informado";
-      }
-      return next;
-    });
-  }
-
-  function copyResult() {
-    const txt = String(result?.output_text ?? "");
-    if (!txt) return;
-    navigator.clipboard.writeText(txt);
   }
 
   function downloadFile(ext: "md" | "txt") {
@@ -195,187 +66,96 @@ export default function AuthorityAgentRunPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `agente-${agentKey}.${ext}`;
+    a.download = `${agentKey}-resultado.${ext}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
   }
 
-  const visualText = String(result?.output_text ?? "");
+  if (!agent) return <div className="p-8">Agente não encontrado.</div>;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 space-y-8">
+      {/* HEADER DO AGENTE */}
+      <div className="flex items-center gap-4 bg-card border rounded-3xl p-6 shadow-sm">
+        <div className="h-16 w-16 rounded-2xl bg-google-blue/10 text-google-blue flex items-center justify-center border border-google-blue/20">
+          <agent.Icon className="h-8 w-8" />
+        </div>
         <div>
-          <div className="text-xs text-slate-500">Agentes de Autoridade</div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            Execução: <span className="capitalize">{agentKey || "—"}</span>
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            onClick={() => nav("/authority-agents")}
-            disabled={loading}
-          >
-            Voltar
-          </button>
+          <h1 className="text-2xl font-bold text-foreground">{agent.name}</h1>
+          <p className="text-muted-foreground mt-1">{agent.desc}</p>
         </div>
       </div>
 
-      {/* Wizard */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs text-slate-500">
-              Passo {step + 1} de {STEPS.length}
-            </div>
-            <h2 className="text-base font-semibold text-slate-900">{STEPS[step].title}</h2>
-          </div>
-
-          <button
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-            onClick={markNotInformedForStep}
-            disabled={loading}
-            title="Preenche este passo com 'não informado'"
-          >
-            Marcar este passo como “não informado”
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {STEPS[step].fields.map((f) => {
-            const v = nucleus[f.key] as any;
-            const isSelect = Array.isArray(f.options);
-            return (
-              <div key={String(f.key)} className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-slate-800">{f.label}</label>
-
-                {isSelect ? (
-                  <select
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300"
-                    value={String(v)}
-                    onChange={(e) => updateField(f.key, e.target.value)}
-                    disabled={loading}
-                  >
-                    {f.options!.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : f.multiline ? (
-                  <textarea
-                    className="min-h-[96px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300"
-                    value={String(v)}
-                    onChange={(e) => updateField(f.key, e.target.value)}
-                    placeholder={f.placeholder}
-                    disabled={loading}
-                  />
-                ) : (
-                  <input
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300"
-                    value={String(v)}
-                    onChange={(e) => updateField(f.key, e.target.value)}
-                    placeholder={f.placeholder}
-                    disabled={loading}
-                  />
-                )}
+      {/* TAREFAS (QUEBRA-GELOS) */}
+      {!result && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold px-1">Escolha uma ação para executar:</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {tasks.length > 0 ? (
+              tasks.map((task, idx) => (
+                <Button 
+                  key={idx} 
+                  variant="outline" 
+                  disabled={loading}
+                  className="h-auto py-4 px-5 justify-start text-left font-normal bg-card hover:border-google-blue/50 hover:bg-google-blue/5 whitespace-normal leading-snug rounded-2xl shadow-sm text-sm"
+                  onClick={() => executeTask(task.title)}
+                >
+                  {loading ? <Loader2 className="h-4 w-4 mr-3 animate-spin shrink-0" /> : <Play className="h-4 w-4 text-google-blue mr-3 shrink-0 opacity-70" />}
+                  {task.title}
+                </Button>
+              ))
+            ) : (
+              <div className="sm:col-span-2">
+                <Button 
+                  variant="accent" 
+                  disabled={loading}
+                  className="w-full h-auto py-4 rounded-2xl"
+                  onClick={() => executeTask()}
+                >
+                  {loading ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : "Gerar Estratégia Completa Padrão"}
+                </Button>
               </div>
-            );
-          })}
-        </div>
-
-        {err ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
-        ) : null}
-
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              disabled={!canBack}
-            >
-              Voltar passo
-            </button>
-            <button
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
-              disabled={!canNext}
-            >
-              Próximo passo
-            </button>
+            )}
           </div>
-
-          <button
-            className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-            onClick={run}
-            disabled={loading}
-          >
-            {loading ? "Executando..." : "Executar agente"}
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* Resultado */}
-      {result ? (
-        <div className="mt-6">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                className={`rounded-xl px-3 py-2 text-xs font-semibold ${
-                  tab === "visual" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"
-                }`}
-                onClick={() => setTab("visual")}
-              >
-                Visual
-              </button>
-              <button
-                className={`rounded-xl px-3 py-2 text-xs font-semibold ${
-                  tab === "raw" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"
-                }`}
-                onClick={() => setTab("raw")}
-              >
-                JSON bruto
-              </button>
+      {/* ESTADO DE CARREGAMENTO */}
+      {loading && !result && (
+        <div className="py-20 flex flex-col items-center justify-center gap-4 animate-pulse">
+          <Loader2 className="h-10 w-10 text-google-blue animate-spin" />
+          <p className="text-muted-foreground font-medium">A IA está processando o núcleo e gerando o resultado...</p>
+        </div>
+      )}
+
+      {/* RESULTADO GERADO */}
+      {result && (
+        <div className="animate-in slide-in-from-bottom-4 fade-in duration-500">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4 bg-green-50/50 border border-green-200 p-4 rounded-2xl dark:bg-green-950/20 dark:border-green-900/50">
+            <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium">
+              <CheckCircle2 className="h-5 w-5" /> Resultado gerado com sucesso
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={copyResult}
-              >
-                Copiar texto
-              </button>
-              <button
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => downloadFile("md")}
-              >
-                Baixar .md
-              </button>
-              <button
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => downloadFile("txt")}
-              >
-                Baixar .txt
-              </button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="bg-white shadow-sm rounded-xl" onClick={() => { navigator.clipboard.writeText(result.output_text); toastSuccess("Copiado!"); }}>
+                <Copy className="h-4 w-4 mr-2" /> Copiar Texto
+              </Button>
+              <Button size="sm" variant="outline" className="bg-white shadow-sm rounded-xl" onClick={() => downloadFile("md")}>
+                <FileText className="h-4 w-4 mr-2" /> Baixar MD
+              </Button>
             </div>
           </div>
+          
+          <ResultViewer title={agent.name} text={result.output_text} />
 
-          {tab === "visual" ? (
-            <ResultViewer title="Resultado" text={visualText} />
-          ) : (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-              <pre className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            </div>
-          )}
+          <div className="mt-8 flex justify-center">
+             <Button variant="secondary" className="rounded-xl px-8" onClick={() => setResult(null)}>
+               Fazer Nova Tarefa
+             </Button>
+          </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
