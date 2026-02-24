@@ -9,8 +9,16 @@ export type BriefingField =
   | "goals"
   | "real_differentials"
   | "restrictions"
+  | "reviews"
+  | "testimonials"
+  | "usable_links_texts"
+  | "forbidden_content"
   | "site"
-  | "instagram";
+  | "google_business_profile"
+  | "instagram"
+  | "linkedin"
+  | "youtube"
+  | "tiktok";
 
 export type JourneyLevel = 1 | 2 | 3 | 4 | 5;
 

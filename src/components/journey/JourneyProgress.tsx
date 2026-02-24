@@ -1,14 +1,11 @@
+import * as React from "react";
 import { motion } from "framer-motion";
 import * as Progress from "@radix-ui/react-progress";
 import { cn } from "@/lib/utils";
 import { LEVELS, JOURNEY_STEPS } from "@/constants/journey";
 import { Badge } from "@/components/ui/badge";
 
-export function JourneyProgress({
-  stepIndex,
-}: {
-  stepIndex: number;
-}) {
+export function JourneyProgress({ stepIndex }: { stepIndex: number }) {
   const total = JOURNEY_STEPS.length;
   const pct = Math.round(((stepIndex + 1) / total) * 100);
 

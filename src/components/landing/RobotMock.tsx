@@ -5,19 +5,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
-type Creator = {
-  name: string;
-  role: string;
-  tone?: "blue" | "red" | "yellow" | "green";
-};
-
 type RobotMockProps = {
   title: string;
   niche: string;
   vibe: string;
   description: string;
   icon: LucideIcon;
-  creator: Creator;
+  tags: string[];
   tone?: "blue" | "red" | "yellow" | "green";
   className?: string;
 };
@@ -28,56 +22,84 @@ export function RobotMock({
   vibe,
   description,
   icon: Icon,
-  creator,
+  tags,
   tone = "blue",
   className,
 }: RobotMockProps) {
   return (
-    <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.18 }} className={cn(className)}>
-      <Card variant="glass" className="glass-hover overflow-hidden">
-        <div className="p-5">
-          <div className="flex items-start gap-3">
-            <Avatar tone={tone} className="h-10 w-10">
-              <AvatarFallback tone={tone}>
-                <Icon className="h-5 w-5" aria-hidden />
-                <span className="sr-only">{title}</span>
-              </AvatarFallback>
-            </Avatar>
+    <motion.div 
+      whileHover={{ y: -4, scale: 1.01 }} 
+      transition={{ duration: 0.2, ease: "easeOut" }} 
+      className={cn("h-full", className)}
+    >
+      <Card className="h-full relative overflow-hidden bg-background/70 backdrop-blur-xl border-border/60 hover:border-foreground/20 transition-all flex flex-col group">
+        
+        {/* Efeito de "Luz de Teto" que acende sutilmente no hover */}
+        <div className={cn(
+          "absolute top-0 left-0 right-0 h-32 opacity-10 group-hover:opacity-30 transition-opacity duration-500 pointer-events-none bg-gradient-to-b to-transparent",
+          tone === "blue" && "from-google-blue",
+          tone === "red" && "from-google-red",
+          tone === "green" && "from-google-green",
+          tone === "yellow" && "from-google-yellow"
+        )} />
+        
+        <div className="p-6 flex-1 flex flex-col relative z-10">
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div className="flex items-center gap-4">
+              <Avatar tone={tone} className="h-12 w-12 ring-2 ring-background shadow-sm">
+                <AvatarFallback tone={tone} className="bg-background">
+                  <Icon className={cn("h-6 w-6", 
+                    tone === "blue" && "text-google-blue",
+                    tone === "red" && "text-google-red",
+                    tone === "green" && "text-google-green",
+                    tone === "yellow" && "text-google-yellow"
+                  )} aria-hidden />
+                </AvatarFallback>
+              </Avatar>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div className="truncate text-sm font-semibold">{title}</div>
-                <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-google-green" aria-hidden />
-                <span className="text-xs text-muted-foreground">online</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-lg tracking-tight">{title}</span>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-google-green opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-google-green"></span>
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-muted-foreground mt-0.5">{niche}</div>
               </div>
-
-              <div className="truncate text-xs text-muted-foreground">{niche}</div>
-
-              <div className="mt-2 text-xs text-muted-foreground">
-                Criado por <span className="font-medium text-foreground">{creator.name}</span> • {creator.role}
-              </div>
-            </div>
-
-            <div className="ml-auto">
-              <Badge variant={tone === "blue" ? "blue" : tone === "red" ? "red" : tone === "green" ? "green" : "yellow"}>
-                ativo
-              </Badge>
             </div>
           </div>
 
-          <div className="mt-4 text-sm leading-snug text-foreground/90 [display:-webkit-box] [-webkit-line-clamp:24] [-webkit-box-orient:vertical] overflow-hidden">
+          <p className="text-sm text-foreground/80 leading-relaxed mb-6 flex-1">
             {description}
-          </div>
+          </p>
 
-          <div className="mt-4 flex flex-wrap gap-4">
-            <Badge variant="secondary">AIO</Badge>
-            <Badge variant="secondary">AEO</Badge>
-            <Badge variant="secondary">GEO</Badge>
-            <Badge variant="outline">{vibe}</Badge>
+          <div className="flex flex-wrap gap-2 mt-auto">
+            <Badge variant="outline" className={cn(
+              "text-[10px] uppercase tracking-wider font-bold border-transparent",
+              tone === "blue" && "bg-google-blue/10 text-google-blue",
+              tone === "red" && "bg-google-red/10 text-google-red",
+              tone === "green" && "bg-google-green/10 text-google-green",
+              tone === "yellow" && "bg-google-yellow/10 text-google-yellow"
+            )}>
+              {vibe}
+            </Badge>
+            {tags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="bg-muted text-[10px] font-medium text-muted-foreground border-transparent shadow-none">
+                {tag}
+              </Badge>
+            ))}
           </div>
         </div>
 
-        <div className="h-10 w-full bg-surface opacity-80" />
+        {/* Linha de força colorida na base do card */}
+        <div className={cn(
+          "h-1.5 w-full mt-auto relative z-10",
+          tone === "blue" && "bg-google-blue",
+          tone === "red" && "bg-google-red",
+          tone === "green" && "bg-google-green",
+          tone === "yellow" && "bg-google-yellow"
+        )} />
       </Card>
     </motion.div>
   );

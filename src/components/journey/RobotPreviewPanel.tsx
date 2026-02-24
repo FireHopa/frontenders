@@ -1,112 +1,141 @@
-import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import * as React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Bot, MapPin, Target, Sparkles, MessageSquare, Briefcase, Zap, 
+  ShieldCheck, AlertCircle, Ban, Star, MessageCircle, Link2, 
+  Globe, Instagram, Linkedin, Youtube, Smartphone 
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { BriefingIn } from "@/types/api";
 import { cn } from "@/lib/utils";
 
-function pickTone(v: BriefingIn): "blue" | "red" | "yellow" | "green" {
-  const s = `${v.niche} ${v.audience} ${v.offer} ${v.goals}`.toLowerCase();
-  if (/(m[eé]d|sa[uú]de|cl[ií]nica|hospital)/.test(s)) return "green";
-  if (/(vendas|lan[cç]amento|oferta|copy|marketing)/.test(s)) return "red";
-  if (/(finance|jur[ií]d|advoc)/.test(s)) return "blue";
-  return "yellow";
+const springTransition = { type: "spring", stiffness: 300, damping: 25 };
+
+// FUNÇÃO À PROVA DE BALAS: Corta exatamente por quantidade de caracteres
+function truncateText(text: string, maxLength: number) {
+  if (!text) return "";
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength).trim() + "...";
 }
 
-function initials(name: string) {
-  return (name || "AR")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase())
-    .join("");
-}
-
-export function RobotPreviewPanel({
-  values,
-  stepIndex,
-}: {
-  values: BriefingIn;
-  stepIndex: number;
+export function RobotPreviewPanel({ 
+  values, 
+  stepIndex 
+}: { 
+  values: Record<string, string>, 
+  stepIndex: number 
 }) {
-  const tone = pickTone(values);
+  const name = values.company_name?.trim() || "Seu Robô";
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  
+  // Todos os campos das Fases 1, 2 e 3 mapeados para a prévia
+  const PREVIEW_FIELDS = [
+    { key: "niche", label: "Nicho", icon: Briefcase, color: "text-google-blue" },
+    { key: "audience", label: "Público", icon: Target, color: "text-google-red" },
+    { key: "offer", label: "Oferta", icon: Zap, color: "text-google-yellow" },
+    { key: "region", label: "Atuação", icon: MapPin, color: "text-google-green" },
+    { key: "tone", label: "Tom de Voz", icon: MessageSquare, color: "text-google-blue" },
+    { key: "goals", label: "Objetivo", icon: Sparkles, color: "text-google-red" },
+    
+    { key: "real_differentials", label: "Diferenciais", icon: ShieldCheck, color: "text-google-blue" },
+    { key: "restrictions", label: "Restrições", icon: AlertCircle, color: "text-google-red" },
+    { key: "forbidden_content", label: "Proibido", icon: Ban, color: "text-google-red" },
+    { key: "reviews", label: "Avaliações", icon: Star, color: "text-google-yellow" },
+    { key: "testimonials", label: "Depoimentos", icon: MessageCircle, color: "text-google-yellow" },
+    { key: "usable_links_texts", label: "Links Úteis", icon: Link2, color: "text-google-green" },
 
-  const keywords = [
-    values.niche,
-    values.audience,
-    values.offer,
-    values.region,
-    values.goals,
-  ]
-    .filter(Boolean)
-    .join(" • ");
-
-  const sample = [
-    `Vou responder com clareza e foco em ${values.niche || "seu nicho"}.`,
-    `Vou adaptar exemplos para ${values.region || "sua região"}.`,
-    `Tom: ${values.tone || "profissional e direto"}.`,
+    { key: "site", label: "Site", icon: Globe, color: "text-google-blue" },
+    { key: "instagram", label: "Instagram", icon: Instagram, color: "text-pink-500" },
+    { key: "google_business_profile", label: "Google", icon: MapPin, color: "text-google-blue" },
+    { key: "linkedin", label: "LinkedIn", icon: Linkedin, color: "text-blue-600" },
+    { key: "youtube", label: "YouTube", icon: Youtube, color: "text-red-500" },
+    { key: "tiktok", label: "TikTok", icon: Smartphone, color: "text-slate-500" },
   ];
 
+  const hasAnyField = PREVIEW_FIELDS.some(f => values[f.key]?.trim());
+
+  // Auto-scroll sempre que um novo campo for preenchido/adicionado
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      const el = scrollRef.current;
+      setTimeout(() => {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }, 150);
+    }
+  }, [stepIndex, values]);
+
   return (
-    <Card variant="glass" className="sticky top-[88px]">
-      <CardHeader>
+    <Card variant="glass" className="overflow-hidden flex flex-col h-full max-h-[550px]">
+      <div className="h-1.5 w-full bg-gradient-to-r from-google-blue/40 via-google-green/40 to-google-yellow/40 shrink-0" />
+      <CardHeader className="pb-4 shrink-0">
         <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ rotate: [0, 1, 0], scale: [1, 1.02, 1] }}
-            transition={{ duration: 3.5, repeat: Infinity }}
-          >
-            <Avatar tone={tone} className="h-11 w-11">
-              <AvatarFallback tone={tone}>{initials(values.company_name)}</AvatarFallback>
-            </Avatar>
-          </motion.div>
-
-          <div className="min-w-0">
-            <CardTitle className="truncate text-base">{values.company_name || "Seu robô"}</CardTitle>
-            <CardDescription className="truncate">
-              {values.niche ? values.niche : "em construção"} • passo {stepIndex + 1}/8
-            </CardDescription>
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-google-blue/10 border border-google-blue/20">
+            <Bot className="h-6 w-6 text-google-blue" />
           </div>
-
-          <div className="ml-auto flex gap-2">
-            <Badge variant="secondary">AIO</Badge>
-            <Badge variant="secondary">AEO</Badge>
-            <Badge variant="secondary">GEO</Badge>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="truncate text-lg">{name}</CardTitle>
+            <div className="text-xs text-muted-foreground mt-0.5">Cérebro em construção</div>
           </div>
+          {hasAnyField && (
+            <Badge variant="outline" className="animate-in fade-in shrink-0 bg-background/50">
+              <span className="relative flex h-2 w-2 mr-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-google-green opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-google-green"></span>
+              </span>
+              Online
+            </Badge>
+          )}
         </div>
       </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className="rounded-2xl border bg-background/40 p-4 text-sm shadow-soft">
-          <div className="text-xs text-muted-foreground">Prévia</div>
-          <div className="mt-2 space-y-2">
-            {sample.map((t) => (
-              <div key={t} className="leading-relaxed">
-                {t}
-              </div>
-            ))}
+      
+      <CardContent className="p-0 overflow-hidden flex flex-col flex-1">
+        {!hasAnyField ? (
+          <div className="px-6 pb-8 text-center text-sm text-muted-foreground">
+            Responda às perguntas da Jornada para ver o cérebro do seu robô ganhando vida aqui em tempo real.
           </div>
-        </div>
+        ) : (
+          <div 
+            ref={scrollRef}
+            className="overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar flex-1"
+          >
+            <AnimatePresence mode="popLayout">
+              {PREVIEW_FIELDS.map((field) => {
+                const val = values[field.key];
+                if (!val || !val.trim()) return null;
 
-        <div>
-          <div className="text-xs font-medium text-muted-foreground">Sinais capturados</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {keywords
-              ? keywords.split(" • ").slice(0, 8).map((k, i) => (
-                  <span
-                    key={k + i}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-xs",
-                      "bg-background/50 text-foreground/80"
-                    )}
+                // Aqui aplicamos a trava de 90 caracteres!
+                const displayVal = truncateText(val, 35);
+
+                return (
+                  <motion.div
+                    key={field.key}
+                    layout
+                    initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={springTransition}
+                    className="flex gap-3 items-start bg-background/40 p-3.5 rounded-2xl border shadow-sm"
                   >
-                    {k}
-                  </span>
-                ))
-              : (
-                <span className="text-xs text-muted-foreground">Responda as perguntas para gerar palavras‑chave.</span>
-              )}
+                    <div className={cn("mt-0.5 shrink-0", field.color)}>
+                      <field.icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {field.label}
+                      </div>
+                      <div 
+                        className="text-sm font-medium text-foreground whitespace-pre-wrap break-words leading-relaxed" 
+                        title={val} // Se passar o mouse, ele mostra o texto inteiro flutuando
+                      >
+                        {displayVal}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
