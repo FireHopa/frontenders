@@ -20,6 +20,7 @@ export interface RobotDetail {
   avatar_data?: string | null;
   system_instructions: string;
   created_at: ISODateString;
+  knowledge_files_json?: string; // NOVO CAMPO
 }
 
 export interface BriefingIn {
@@ -111,6 +112,8 @@ export interface BusinessCoreOut {
   tiktok: string;
 
   updated_at: ISODateString;
+  knowledge_text?: string;
+  knowledge_files_json?: string;
 }
 
 export interface BusinessCoreIn {
@@ -133,6 +136,8 @@ export interface BusinessCoreIn {
   linkedin?: string | null;
   youtube?: string | null;
   tiktok?: string | null;
+  knowledge_text?: string;
+  knowledge_files_json?: string;
 }
 
 export interface AuthorityAgentRunRequest {

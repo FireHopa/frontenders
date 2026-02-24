@@ -20,6 +20,9 @@ import { fileToResizedDataUrl } from "@/lib/image";
 import { transitions } from "@/lib/motion";
 import { toastApiError, toastSuccess } from "@/lib/toast";
 
+// Importamos o componente de Uploader
+import { KnowledgeUploader } from "@/components/robot/KnowledgeUploader";
+
 function initials(title: string) {
   return (title || "ORI")
     .split(" ")
@@ -31,7 +34,8 @@ function initials(title: string) {
 
 export function RobotDetailPage() {
   const { publicId = "" } = useParams();
-  const { data: robot, isLoading, isError, error } = useRobot(publicId);
+  // Adicionamos o "refetch" aqui para recarregar os dados após o upload do arquivo
+  const { data: robot, isLoading, isError, error, refetch } = useRobot(publicId);
   const upd = useUpdateRobot(publicId);
 
   const msgs = useRobotMessages(publicId);
@@ -59,7 +63,6 @@ export function RobotDetailPage() {
   const onAvatarFile: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // permite escolher o mesmo arquivo novamente
     e.currentTarget.value = "";
 
     try {
@@ -325,20 +328,33 @@ export function RobotDetailPage() {
                     </div>
                   </Tabs.Content>
 
+                  {/* ABA DE INSTRUÇÕES COM O UPLOADER EMBUTIDO */}
                   <Tabs.Content value="instrucoes" className="mt-4">
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Instruções do sistema</div>
-                      <Textarea
-                        value={sys}
-                        onChange={(e) => setSys(e.target.value)}
-                        placeholder="Regras, tom, limites, exemplos…"
-                        rows={8}
-                      />
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs text-muted-foreground">Dica: escreva exemplos do que ele deve e não deve dizer.</div>
-                        <Button onClick={() => void onSaveInstructions()} disabled={upd.isPending}>
-                          Salvar
-                        </Button>
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium">Instruções do sistema</div>
+                        <Textarea
+                          value={sys}
+                          onChange={(e) => setSys(e.target.value)}
+                          placeholder="Regras, tom, limites, exemplos…"
+                          rows={8}
+                        />
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs text-muted-foreground">Dica: escreva exemplos do que ele deve e não deve dizer.</div>
+                          <Button onClick={() => void onSaveInstructions()} disabled={upd.isPending}>
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Uploader Complementar */}
+                      <div className="pt-2 border-t border-border/40">
+                        <KnowledgeUploader 
+                          publicId={robot.public_id} 
+                          type="robot" 
+                          existingFilesJson={robot.knowledge_files_json}
+                          onUploadSuccess={() => refetch()} 
+                        />
                       </div>
                     </div>
                   </Tabs.Content>

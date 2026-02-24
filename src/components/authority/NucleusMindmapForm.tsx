@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { BusinessCore3D } from "@/components/authority/BusinessCore3D";
+import { KnowledgeUploader } from "@/components/robot/KnowledgeUploader";
 
 export type Nucleus = Record<string, any>;
 
@@ -115,6 +116,9 @@ export function NucleusMindmapForm({
   coreState = "idle",
   className,
   style,
+  robotPublicId,
+  knowledgeFilesJson,
+  onUploadSuccess,
 }: {
   value: Nucleus;
   onChange: (next: Nucleus) => void;
@@ -122,6 +126,9 @@ export function NucleusMindmapForm({
   coreState?: "idle" | "ready" | "running";
   className?: string;
   style?: React.CSSProperties;
+  robotPublicId?: string;
+  knowledgeFilesJson?: string | null;
+  onUploadSuccess?: () => void;
 }) {
   const nucleus = value ?? {};
 
@@ -164,7 +171,7 @@ export function NucleusMindmapForm({
         </button>
       </div>
 
-            <div className="p-4">
+      <div className="p-4">
         {/* topo: obrigatórios (divididos) + núcleo no centro */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* esquerda: obrigatórios (parte 1) */}
@@ -230,6 +237,27 @@ export function NucleusMindmapForm({
             ))}
           </div>
         </section>
-      </div>      </div>
+
+        {/* SECÃO NOVA: UPLOADER NO FINAL DO FORMULÁRIO */}
+        {robotPublicId && (
+          <section className="mt-6 pt-6 border-t border-border/40">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Materiais de Apoio
+            </div>
+            <div className="mb-4 text-sm text-muted-foreground">
+              Você pode adicionar PDFs ou textos com conhecimentos e regras extras da empresa.
+            </div>
+            <KnowledgeUploader 
+              publicId={robotPublicId}
+              type="business-core" 
+              existingFilesJson={knowledgeFilesJson}
+              onUploadSuccess={() => {
+                if (onUploadSuccess) onUploadSuccess();
+              }}
+            />
+          </section>
+        )}
+      </div>
+    </div>
   );
 }

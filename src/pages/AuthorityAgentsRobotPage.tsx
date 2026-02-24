@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Timer, CheckCircle2, Play, Edit2, Copy, X, BrainCircuit, ShieldCheck, Link2 } from "lucide-react";
+import { Timer, CheckCircle2, Play, Edit2, Copy, X, BrainCircuit, ShieldCheck, Link2, FileText } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/services/robots";
@@ -15,6 +15,7 @@ import { toastApiError, toastSuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { transitions, fadeUp } from "@/lib/motion";
 import { Markdown } from "@/components/markdown/Markdown";
+import { KnowledgeUploader } from "@/components/robot/KnowledgeUploader";
 
 function formatRemaining(sec: number) {
   if (sec <= 0) return "Pronto";
@@ -231,7 +232,7 @@ export default function AuthorityAgentsRobotPage() {
         </div>
       </div>
 
-      {/* OVERLAY MODAL - EDIÇÃO DO NÚCLEO (Escondido até clicar em Editar) */}
+      {/* OVERLAY MODAL - EDIÇÃO DO NÚCLEO */}
       <AnimatePresence>
         {isEditingCore && (
           <motion.div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -244,6 +245,8 @@ export default function AuthorityAgentsRobotPage() {
                 <Button variant="ghost" size="icon" className="rounded-full bg-background/50 hover:bg-background" onClick={() => setIsEditingCore(false)}><X className="h-5 w-5" /></Button>
               </div>
               <div className="overflow-y-auto p-6 space-y-8 bg-background/30 custom-scrollbar">
+                
+                {/* CAMPOS DE TEXTO ORIGINAIS */}
                 {CORE_GROUPS.map(g => (
                   <div key={g.title} className="space-y-4">
                     <h3 className="font-semibold text-sm uppercase text-muted-foreground flex items-center gap-2"><g.icon className="h-4 w-4" /> {g.title}</h3>
@@ -261,6 +264,28 @@ export default function AuthorityAgentsRobotPage() {
                     </div>
                   </div>
                 ))}
+
+                {/* NOVO CAMPO: UPLOADER DENTRO DO MODAL DE EDIÇÃO */}
+                <div className="space-y-4 pt-4 border-t border-border/40">
+                  <h3 className="font-semibold text-sm uppercase text-muted-foreground flex items-center gap-2">
+                    <FileText className="h-4 w-4" /> Materiais de Apoio
+                  </h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <label className="text-sm font-medium pl-1">Anexar Documentos (PDF, DOCX, TXT)</label>
+                      <KnowledgeUploader 
+                        publicId={publicId}
+                        type="business-core" 
+                        existingFilesJson={coreData?.knowledge_files_json}
+                        onUploadSuccess={() => {
+                          // Recarrega os dados do cérebro na mesma hora após o upload
+                          queryClient.invalidateQueries({ queryKey: ["business-core", publicId] });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
               </div>
               <div className="p-4 border-t bg-background/50 flex justify-end gap-3">
                 <Button variant="ghost" className="rounded-xl" onClick={() => setIsEditingCore(false)}>Cancelar</Button>
