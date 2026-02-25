@@ -206,7 +206,7 @@ export default function AuthorityAgentChatPage() {
                         }}
                         className={cn(
                           "w-full max-w-[260px] rounded-2xl border bg-background/60 px-3 py-2 text-left text-xs shadow-soft",
-                          "backdrop-blur hover:bg-foreground/5",
+                          "backdrop-blur hover:bg-[rgba(0,200,232,0.10)]",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                           busy ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                         )}
@@ -252,7 +252,7 @@ export default function AuthorityAgentChatPage() {
                         }}
                         className={cn(
                           "w-full max-w-[260px] rounded-2xl border bg-background/60 px-3 py-2 text-left text-xs shadow-soft",
-                          "backdrop-blur hover:bg-foreground/5",
+                          "backdrop-blur hover:bg-[rgba(0,200,232,0.10)]",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                           busy ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                         )}

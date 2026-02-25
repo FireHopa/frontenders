@@ -29,10 +29,10 @@ const AvatarImage = React.forwardRef<
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 const toneClass: Record<string, string> = {
-  blue: "bg-google-blue/10 text-google-blue",
-  red: "bg-google-red/10 text-google-red",
-  yellow: "bg-google-yellow/15 text-foreground",
-  green: "bg-google-green/12 text-google-green",
+  blue: "bg-[rgba(0,200,232,0.08)] text-google-blue",
+  red: "bg-[rgba(255,100,100,0.15)] text-google-red",
+  yellow: "bg-[rgba(255,165,0,0.15)] text-foreground",
+  green: "bg-[rgba(0,210,120,0.15)] text-google-green",
 };
 
 const AvatarFallback = React.forwardRef<

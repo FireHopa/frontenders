@@ -45,11 +45,11 @@ export function RobotPreviewPanel({
     { key: "usable_links_texts", label: "Links Úteis", icon: Link2, color: "text-google-green" },
 
     { key: "site", label: "Site", icon: Globe, color: "text-google-blue" },
-    { key: "instagram", label: "Instagram", icon: Instagram, color: "text-pink-500" },
+    { key: "instagram", label: "Instagram", icon: Instagram, color: "text-google-purple" },
     { key: "google_business_profile", label: "Google", icon: MapPin, color: "text-google-blue" },
-    { key: "linkedin", label: "LinkedIn", icon: Linkedin, color: "text-blue-600" },
-    { key: "youtube", label: "YouTube", icon: Youtube, color: "text-red-500" },
-    { key: "tiktok", label: "TikTok", icon: Smartphone, color: "text-slate-500" },
+    { key: "linkedin", label: "LinkedIn", icon: Linkedin, color: "text-google-blue" },
+    { key: "youtube", label: "YouTube", icon: Youtube, color: "text-google-red" },
+    { key: "tiktok", label: "TikTok", icon: Smartphone, color: "text-tertiary" },
   ];
 
   const hasAnyField = PREVIEW_FIELDS.some(f => values[f.key]?.trim());
@@ -69,7 +69,7 @@ export function RobotPreviewPanel({
       <div className="h-1.5 w-full bg-gradient-to-r from-google-blue/40 via-google-green/40 to-google-yellow/40 shrink-0" />
       <CardHeader className="pb-4 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-google-blue/10 border border-google-blue/20">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[rgba(0,200,232,0.08)] border border-google-blue/20">
             <Bot className="h-6 w-6 text-google-blue" />
           </div>
           <div className="min-w-0 flex-1">

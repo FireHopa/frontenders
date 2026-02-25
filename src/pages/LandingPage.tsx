@@ -16,7 +16,7 @@ export function LandingPage() {
     <div className="relative min-h-screen w-full overflow-hidden flex flex-col">
       {/* Background dinâmico super expandido para cobrir telas gigantes */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-background" />
-      <div aria-hidden className="pointer-events-none absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full bg-google-blue/10 blur-[140px]" />
+      <div aria-hidden className="pointer-events-none absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full bg-[rgba(0,200,232,0.08)] blur-[140px]" />
       <div aria-hidden className="pointer-events-none absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] max-w-[700px] max-h-[700px] rounded-full bg-google-green/10 blur-[140px]" />
       
       <Particles className="absolute inset-0 z-0 opacity-60" />
@@ -27,7 +27,7 @@ export function LandingPage() {
           
           <div className="flex flex-col items-start w-full">
             <MotionInView>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-google-blue/10 border border-google-blue/20 text-google-blue text-xs font-semibold tracking-wide w-fit mb-8 shadow-soft">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(0,200,232,0.08)] border border-google-blue/20 text-google-blue text-xs font-semibold tracking-wide w-fit mb-8 shadow-soft">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-google-blue opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-google-blue"></span>
@@ -57,7 +57,7 @@ export function LandingPage() {
 
             <MotionInView delay={0.2} className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-2xl">
               {[
-                { icon: BrainCircuit, title: "Núcleo Central", desc: "1 cérebro para 10 agentes", color: "text-google-blue", bg: "bg-google-blue/10" },
+                { icon: BrainCircuit, title: "Núcleo Central", desc: "1 cérebro para 10 agentes", color: "text-google-blue", bg: "bg-[rgba(0,200,232,0.08)]" },
                 { icon: Zap, title: "Geração Ágil", desc: "Roteiros e posts em 1 clique", color: "text-google-yellow", bg: "bg-google-yellow/10" },
                 { icon: ShieldCheck, title: "Blindado", desc: "Respeita suas regras", color: "text-google-green", bg: "bg-google-green/10" },
               ].map((feat, i) => (
@@ -115,12 +115,12 @@ export function LandingPage() {
         <div className="w-full max-w-6xl mx-auto">
           <MotionInView>
             <Card className="relative w-full overflow-hidden rounded-[3rem] border-0 bg-transparent shadow-2xl group mb-12">
-              <div className="absolute inset-0 bg-foreground/5 backdrop-blur-xl z-0" />
+              <div className="absolute inset-0 bg-[rgba(0,200,232,0.08)] backdrop-blur-xl z-0" />
               <div className="absolute inset-0 bg-gradient-to-br from-google-blue/20 via-background to-google-green/20 z-0 opacity-80 group-hover:opacity-100 transition-opacity duration-700" />
               
               <div className="relative z-10 py-20 px-6 md:px-16 text-center flex flex-col items-center">
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-                  <Badge className="bg-google-blue text-white border-transparent text-sm px-3 py-1">Fase 1</Badge>
+                  <Badge className="bg-google-blue text-foreground border-transparent text-sm px-3 py-1">Fase 1</Badge>
                   <Badge variant="secondary" className="bg-background/50 backdrop-blur-md border-border/50 text-sm px-3 py-1">Criação Rápida</Badge>
                   <Badge variant="outline" className="bg-background/50 backdrop-blur-md border-border/50 text-sm px-3 py-1"><Sparkles className="h-3.5 w-3.5 mr-1.5" /> UX Premium</Badge>
                 </div>

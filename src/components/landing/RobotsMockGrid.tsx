@@ -8,9 +8,9 @@ export function RobotsMockGrid() {
       {/* O TCHAN: Falso Header de Janela de Sistema (macOS style) */}
       <div className="flex items-center gap-2 px-4 py-3.5 border-b border-border/50 bg-muted/40 backdrop-blur-md">
         <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f56] shadow-sm" />
-          <div className="w-3 h-3 rounded-full bg-[#ffbd2e] shadow-sm" />
-          <div className="w-3 h-3 rounded-full bg-[#27c93f] shadow-sm" />
+          <div className="w-3 h-3 rounded-full bg-[#FF6464] shadow-sm" />
+          <div className="w-3 h-3 rounded-full bg-[#FFA500] shadow-sm" />
+          <div className="w-3 h-3 rounded-full bg-[#00D278] shadow-sm" />
         </div>
         <div className="flex-1 text-center pr-8">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">

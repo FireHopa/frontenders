@@ -77,8 +77,8 @@ export function RobotMock({
           <div className="flex flex-wrap gap-2 mt-auto">
             <Badge variant="outline" className={cn(
               "text-[10px] uppercase tracking-wider font-bold border-transparent",
-              tone === "blue" && "bg-google-blue/10 text-google-blue",
-              tone === "red" && "bg-google-red/10 text-google-red",
+              tone === "blue" && "bg-[rgba(0,200,232,0.08)] text-google-blue",
+              tone === "red" && "bg-[rgba(255,100,100,0.15)] text-google-red",
               tone === "green" && "bg-google-green/10 text-google-green",
               tone === "yellow" && "bg-google-yellow/10 text-google-yellow"
             )}>

@@ -79,7 +79,7 @@ export default function AuthorityAgentRunPage() {
     <div className="mx-auto w-full max-w-5xl px-4 py-8 space-y-8">
       {/* HEADER DO AGENTE */}
       <div className="flex items-center gap-4 bg-card border rounded-3xl p-6 shadow-sm">
-        <div className="h-16 w-16 rounded-2xl bg-google-blue/10 text-google-blue flex items-center justify-center border border-google-blue/20">
+        <div className="h-16 w-16 rounded-2xl bg-[rgba(0,200,232,0.08)] text-google-blue flex items-center justify-center border border-google-blue/20">
           <agent.Icon className="h-8 w-8" />
         </div>
         <div>
@@ -133,15 +133,15 @@ export default function AuthorityAgentRunPage() {
       {/* RESULTADO GERADO */}
       {result && (
         <div className="animate-in slide-in-from-bottom-4 fade-in duration-500">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-4 bg-green-50/50 border border-green-200 p-4 rounded-2xl dark:bg-green-950/20 dark:border-green-900/50">
-            <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4 bg-[rgba(0,210,120,0.15)] border border-[rgba(0,210,120,0.22)] p-4 rounded-2xl ">
+            <div className="flex items-center gap-2 text-[#00D278] font-medium">
               <CheckCircle2 className="h-5 w-5" /> Resultado gerado com sucesso
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="bg-white shadow-sm rounded-xl" onClick={() => { navigator.clipboard.writeText(result.output_text); toastSuccess("Copiado!"); }}>
+              <Button size="sm" variant="outline" className="bg-card shadow-sm rounded-xl" onClick={() => { navigator.clipboard.writeText(result.output_text); toastSuccess("Copiado!"); }}>
                 <Copy className="h-4 w-4 mr-2" /> Copiar Texto
               </Button>
-              <Button size="sm" variant="outline" className="bg-white shadow-sm rounded-xl" onClick={() => downloadFile("md")}>
+              <Button size="sm" variant="outline" className="bg-card shadow-sm rounded-xl" onClick={() => downloadFile("md")}>
                 <FileText className="h-4 w-4 mr-2" /> Baixar MD
               </Button>
             </div>

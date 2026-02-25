@@ -189,7 +189,7 @@ export function CompetitorFindWizard({
                 <span>{showSummary ? "Resumo" : `Passo ${Math.min(idx + 1, total)} de ${total}`}</span>
                 <Badge variant="secondary">{showSummary ? "revisão" : `${progress}%`}</Badge>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-foreground/5">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[rgba(0,200,232,0.08)]">
                 <div
                   className={cn("h-full rounded-full bg-google-blue/60 transition-all")}
                   style={{ width: `${showSummary ? 100 : Math.max(progress, 5)}%` }}
@@ -215,7 +215,7 @@ export function CompetitorFindWizard({
                       placeholder={step.placeholder}
                       className="bg-background/40"
                     />
-                    {error ? <div className="text-xs text-red-500">{error}</div> : <div className="text-xs text-muted-foreground">Dica: Enter continua. Esc fecha.</div>}
+                    {error ? <div className="text-xs text-[#FF5050]">{error}</div> : <div className="text-xs text-muted-foreground">Dica: Enter continua. Esc fecha.</div>}
                   </>
                 ) : (
                   <div className="rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
@@ -237,7 +237,7 @@ export function CompetitorFindWizard({
                   </div>
 
                   {requiredStillMissing.length ? (
-                    <div className="mt-3 rounded-xl border border-red-200/40 bg-red-500/5 p-3 text-xs text-red-600">
+                    <div className="mt-3 rounded-xl border border-red-200/40 bg-[#FF5050]/5 p-3 text-xs text-[#FF5050]">
                       Falta preencher: {requiredStillMissing.map(String).join(", ")}.
                     </div>
                   ) : null}

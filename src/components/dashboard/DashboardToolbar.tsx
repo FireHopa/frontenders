@@ -80,8 +80,8 @@ export function DashboardToolbar({
             type="button"
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium transition",
-              "hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              filter === f.id ? "bg-foreground/5" : "bg-background/40"
+              "hover:bg-[rgba(0,200,232,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              filter === f.id ? "bg-[rgba(0,200,232,0.08)]" : "bg-background/40"
             )}
             onClick={() => onFilterChange(f.id)}
             aria-pressed={filter === f.id}

@@ -72,7 +72,7 @@ export default function AuthorityAgentsPage() {
         {/* SEÇÃO 1: AGENTES DE AUTORIDADE */}
         <section className="space-y-8">
           <div className="flex flex-col gap-4 border-b border-border/40 pb-6">
-            <Badge variant="outline" className="w-fit mb-2 bg-google-blue/10 text-google-blue border-google-blue/20">Centro Operacional</Badge>
+            <Badge variant="outline" className="w-fit mb-2 bg-[rgba(0,200,232,0.08)] text-google-blue border-google-blue/20">Centro Operacional</Badge>
             <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <Sparkles className="h-6 w-6 text-google-blue" /> Agentes de Autoridade
             </h1>
@@ -92,13 +92,13 @@ export default function AuthorityAgentsPage() {
                   disabled ? "bg-muted/20 border-border/40 opacity-90" : "bg-card hover:border-google-blue/40 hover:shadow-md"
                 )}>
                   <div className="p-6 flex-1 flex flex-col gap-4">
-                    <div className={cn("h-14 w-14 rounded-2xl flex items-center justify-center border shadow-sm", disabled ? "bg-background text-muted-foreground" : "bg-google-blue/10 text-google-blue border-google-blue/20")}>
+                    <div className={cn("h-14 w-14 rounded-2xl flex items-center justify-center border shadow-sm", disabled ? "bg-background text-muted-foreground" : "bg-[rgba(0,200,232,0.08)] text-google-blue border-google-blue/20")}>
                       <agent.Icon className="h-7 w-7" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="font-semibold text-lg text-foreground flex items-center justify-between">
                         {agent.name}
-                        {remaining > 0 && <span className="text-[10px] font-medium text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><Timer className="h-3 w-3" /> {formatRemaining(remaining)}</span>}
+                        {remaining > 0 && <span className="text-[10px] font-medium text-google-yellow bg-google-yellow/10 px-2 py-0.5 rounded-full flex items-center gap-1"><Timer className="h-3 w-3" /> {formatRemaining(remaining)}</span>}
                       </h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">{agent.desc}</p>
                     </div>
@@ -123,7 +123,7 @@ export default function AuthorityAgentsPage() {
         {/* SEÇÃO 2: HISTÓRICO DE GERAÇÕES */}
         <section className="space-y-6 pt-8 border-t border-border/40">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-foreground/5 text-foreground flex items-center justify-center border shadow-sm">
+            <div className="h-10 w-10 rounded-xl bg-[rgba(0,200,232,0.08)] text-foreground flex items-center justify-center border shadow-sm">
               <History className="h-5 w-5 opacity-80" />
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function AuthorityAgentsPage() {
                     onClick={() => setSelectedHistory(item)}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-google-blue/10 text-google-blue flex items-center justify-center border border-google-blue/20 shrink-0">
+                      <div className="h-10 w-10 rounded-xl bg-[rgba(0,200,232,0.08)] text-google-blue flex items-center justify-center border border-google-blue/20 shrink-0">
                         <AgentIcon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -192,7 +192,7 @@ export default function AuthorityAgentsPage() {
              >
                 <div className="px-6 py-5 border-b flex items-center justify-between bg-background shadow-sm z-10">
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-google-blue/10 text-google-blue flex items-center justify-center border border-google-blue/20 shrink-0">
+                    <div className="h-12 w-12 rounded-2xl bg-[rgba(0,200,232,0.08)] text-google-blue flex items-center justify-center border border-google-blue/20 shrink-0">
                       <History className="h-6 w-6" />
                     </div>
                     <div className="min-w-0">

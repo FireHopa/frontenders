@@ -21,7 +21,7 @@ export function AuthorityMeter({ systemInstructions }: { systemInstructions: str
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Progress.Root className="relative h-2 w-full overflow-hidden rounded-full bg-foreground/5">
+        <Progress.Root className="relative h-2 w-full overflow-hidden rounded-full bg-[rgba(0,200,232,0.08)]">
           <motion.div
             className="h-full rounded-full bg-google-blue/75"
             initial={{ width: 0 }}

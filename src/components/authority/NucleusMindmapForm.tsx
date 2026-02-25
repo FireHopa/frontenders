@@ -58,7 +58,7 @@ function StatusDot({ ok }: { ok: boolean }) {
       aria-hidden
       className={cn(
         "inline-block h-2.5 w-2.5 rounded-full border",
-        ok ? "bg-emerald-500 border-emerald-600" : "bg-muted border-border"
+        ok ? "bg-[#00D278] border-emerald-600" : "bg-muted border-border"
       )}
     />
   );

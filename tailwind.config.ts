@@ -55,6 +55,7 @@ export default {
           red: "hsl(var(--g-red))",
           yellow: "hsl(var(--g-yellow))",
           green: "hsl(var(--g-green))",
+          purple: "hsl(var(--g-purple))",
         },
       },
       boxShadow: {

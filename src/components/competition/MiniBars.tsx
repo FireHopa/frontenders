@@ -27,7 +27,7 @@ export function MiniBars({
           return (
             <div key={k} className="grid grid-cols-[110px_1fr_44px] items-center gap-3">
               <div className="text-xs text-muted-foreground">{DIM_LABEL[k]}</div>
-              <div className="h-2 overflow-hidden rounded-full bg-foreground/5">
+              <div className="h-2 overflow-hidden rounded-full bg-[rgba(0,200,232,0.08)]">
                 <div
                   className={cn("h-full rounded-full bg-google-blue/60")}
                   style={{ width: `${v}%` }}

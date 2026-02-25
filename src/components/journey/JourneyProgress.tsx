@@ -34,7 +34,7 @@ export function JourneyProgress({ stepIndex }: { stepIndex: number }) {
         </div>
       </div>
 
-      <Progress.Root className="relative h-2 w-full overflow-hidden rounded-full bg-foreground/5">
+      <Progress.Root className="relative h-2 w-full overflow-hidden rounded-full bg-[rgba(0,200,232,0.08)]">
         <motion.div
           className="h-full rounded-full bg-google-blue/70"
           initial={{ width: 0 }}

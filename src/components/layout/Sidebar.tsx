@@ -78,7 +78,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-dvh border-r bg-background/55 backdrop-blur shadow-[0_0_0_1px_rgba(0,0,0,0.02)] transition-all flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar"
+        "fixed left-0 top-0 z-40 h-dvh border-r border-[rgba(0,200,232,0.08)] bg-sidebar backdrop-blur shadow-sidebar transition-all flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar scrollbar-gutter-stable"
       )}
       style={{ width }}
     >
@@ -87,7 +87,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
           to="/"
           className={cn(
             "group flex items-center gap-3 rounded-2xl px-3 py-3 transition",
-            "hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            "hover:bg-[rgba(0,200,232,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           )}
         >
           <img src={logoUrl} alt="Logo Autoridade" className={cn("h-10 w-auto max-w-[160px] object-contain", collapsed ? "max-w-[44px]" : "")} />
@@ -100,7 +100,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); setCollapsed((v) => !v); }}
-            className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl border bg-background/40 shadow-soft transition hover:bg-foreground/5")}
+            className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl border bg-background/40 shadow-soft transition hover:bg-[rgba(0,200,232,0.10)]")}
           >
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
@@ -120,11 +120,11 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
                     onClick={(e) => { if (hasSub && !collapsed) { toggleSubMenu(it.label, e); } }}
                     className={cn(
                       "group flex flex-1 items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition relative",
-                      "hover:bg-foreground/5",
-                      isActiveParent ? "bg-foreground/5 ring-1 ring-border/70" : "ring-1 ring-transparent"
+                      "hover:bg-[rgba(0,200,232,0.10)]",
+                      isActiveParent ? "bg-[rgba(0,200,232,0.08)] ring-1 ring-border/70" : "ring-1 ring-transparent"
                     )}
                   >
-                    <motion.div initial={false} animate={{ scale: isActiveParent ? 1.02 : 1 }} transition={transitions.base} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl border shadow-soft", isActiveParent ? "bg-background/60" : "bg-background/40")}>
+                    <motion.div initial={false} animate={{ scale: isActiveParent ? 1.02 : 1 }} transition={transitions.base} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl border shadow-soft", isActiveParent ? "bg-[rgba(0,200,232,0.08)]" : "bg-[rgba(0,200,232,0.08)]")}>
                       <it.Icon className={cn("h-5 w-5", isActiveParent ? "text-foreground" : "text-muted-foreground")} />
                     </motion.div>
                     {!collapsed && (
@@ -154,7 +154,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
                               to={sub.to}
                               className={({ isActive }) => cn(
                                 "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-                                isActive ? "bg-google-blue/10 text-google-blue font-medium" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                                isActive ? "bg-[rgba(0,200,232,0.12)] text-google-blue font-medium shadow-[inset_3px_0_0_0_#00C8E8]" : "text-muted-foreground hover:bg-[rgba(0,200,232,0.10)] hover:text-foreground"
                               )}
                             >
                               <sub.Icon className="h-4 w-4 shrink-0" />

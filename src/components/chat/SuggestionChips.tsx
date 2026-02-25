@@ -26,7 +26,7 @@ export function SuggestionChips({
           disabled={disabled}
           className={cn(
             "rounded-full border bg-background/40 px-3 py-1 text-xs font-medium shadow-soft transition",
-            "hover:bg-foreground/5 disabled:opacity-50 disabled:cursor-not-allowed"
+            "hover:bg-[rgba(0,200,232,0.10)] disabled:opacity-50 disabled:cursor-not-allowed"
           )}
           onClick={() => onPick(c)}
           initial={{ opacity: 0, y: 6 }}

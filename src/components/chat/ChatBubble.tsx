@@ -39,7 +39,7 @@ export function ChatBubble({
         <div
           className={cn(
             "max-w-[92%] sm:max-w-[75%] rounded-2xl border px-4 py-3 shadow-soft",
-            isUser ? "bg-google-blue/10 border-google-blue/20" : "bg-background/55 border-border/70",
+            isUser ? "bg-[rgba(0,200,232,0.08)] border-google-blue/20" : "bg-background/55 border-border/70",
             "glass"
           )}
         >

@@ -101,7 +101,7 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
             <div className="grid gap-2 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
               {uploadedFiles.map((f, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm bg-background p-3 rounded-xl border group min-w-0 transition-colors hover:border-google-blue/30 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-[#00D278] shrink-0" />
                   
                   {/* O min-w-0 aqui impede o nome do arquivo de quebrar a tela inteira! */}
                   <div className="flex-1 min-w-0 flex flex-col">
@@ -116,7 +116,7 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 shrink-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                    className="h-8 w-8 shrink-0 text-[#FF5050] hover:text-[#FF5050] hover:bg-[rgba(255,80,80,0.15)] dark:hover:bg-red-950/30 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                     disabled={deletingFile === f.filename}
                     onClick={() => handleDelete(f.filename)}
                     title="Excluir arquivo"

@@ -19,16 +19,16 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
     <section className="w-full">
       {title ? (
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-border bg-card shadow-sm">
         <div className="p-4 sm:p-6">
           {blocks.length === 0 ? (
-            <div className="text-sm text-slate-500">Sem conteúdo.</div>
+            <div className="text-sm text-tertiary">Sem conteúdo.</div>
           ) : (
-            <div className="prose prose-slate max-w-none">
+            <div className="prose prose-invert max-w-none">
               {blocks.map((b, idx) => renderBlock(b, idx))}
             </div>
           )}
@@ -163,7 +163,7 @@ function renderBlock(b: Block, key: number) {
     return (
       <pre
         key={key}
-        className="my-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed"
+        className="my-4 overflow-x-auto rounded-xl border border-border bg-[rgba(0,200,232,0.08)] p-4 text-xs leading-relaxed"
       >
         <code>{b.text}</code>
       </pre>
@@ -194,7 +194,7 @@ function inlineFormat(s: string) {
   let x = escapeHtml(s);
 
   // `code`
-  x = x.replace(/`([^`]+)`/g, (_m, g1) => `<code class="rounded bg-slate-100 px-1 py-0.5 text-[0.85em]">${g1}</code>`);
+  x = x.replace(/`([^`]+)`/g, (_m, g1) => `<code class="rounded bg-[rgba(0,200,232,0.12)] px-1 py-0.5 text-[0.85em]">${g1}</code>`);
 
   // **bold**
   x = x.replace(/\*\*([^*]+)\*\*/g, (_m, g1) => `<strong>${g1}</strong>`);

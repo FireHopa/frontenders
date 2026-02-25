@@ -237,7 +237,7 @@ export function JourneyWizard() {
                               key={opt.id}
                               type="button"
                               onClick={() => { setToneChoice(opt.value); if (opt.value !== "__OTHER__") { setCustomTone(""); setValue(opt.value); } else { setValue(customTone); } }}
-                              className={["w-full rounded-xl border px-4 py-3 text-left transition", selected ? "border-google-blue/70 bg-google-blue/10" : "border-border/60 hover:bg-background/40"].join(" ")}
+                              className={["w-full rounded-xl border px-4 py-3 text-left transition", selected ? "border-google-blue/70 bg-[rgba(0,200,232,0.08)]" : "border-border/60 hover:bg-background/40"].join(" ")}
                             >
                               <div className="font-medium">{opt.label}</div>
                             </button>
@@ -304,7 +304,7 @@ export function JourneyWizard() {
               <Card className="overflow-hidden rounded-[2.5rem] border-border/50 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] bg-card/90 backdrop-blur-3xl relative">
                 
                 {/* Glow de fundo */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-32 bg-google-blue/20 blur-[60px] pointer-events-none rounded-full" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-32 bg-[rgba(0,200,232,0.12)] blur-[60px] pointer-events-none rounded-full" />
                 
                 {/* Faixa Colorida no Topo */}
                 <div className="h-2 w-full bg-gradient-to-r from-google-blue via-google-green to-google-yellow" />
@@ -316,7 +316,7 @@ export function JourneyWizard() {
                     initial={{ scale: 0 }} 
                     animate={{ scale: 1 }} 
                     transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.3 }}
-                    className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-google-green/10 border border-google-green/20 text-google-green shadow-[0_0_40px_-10px_rgba(34,197,94,0.4)]"
+                    className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-google-green/10 border border-google-green/20 text-google-green shadow-[0_0_40px_-10px_rgba(0,210,120,0.40)]"
                   >
                     <CheckCircle2 className="h-12 w-12" />
                   </motion.div>

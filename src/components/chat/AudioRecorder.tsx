@@ -86,7 +86,7 @@ export function AudioRecorderInline({
     // background line
     ctx.globalAlpha = 0.6;
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgba(66,133,244,0.55)"; // google blue-ish (ok here, used only in canvas)
+    ctx.strokeStyle = "rgba(0,200,232,0.30)"; // google blue-ish (ok here, used only in canvas)
     ctx.beginPath();
 
     const slice = w / data.length;
@@ -102,7 +102,7 @@ export function AudioRecorderInline({
 
     // center glow
     ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = "rgba(66,133,244,0.9)";
+    ctx.strokeStyle = "rgba(0,200,232,0.60)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, h / 2);

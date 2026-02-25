@@ -130,7 +130,7 @@ export default function AuthorityAgentsRobotPage() {
       {/* HEADER DA PÁGINA */}
       <div className="flex flex-col gap-4 border-b border-border/40 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Badge variant="outline" className="mb-2 bg-google-blue/10 text-google-blue border-google-blue/20">Centro de Comando</Badge>
+          <Badge variant="outline" className="mb-2 bg-[rgba(0,200,232,0.08)] text-google-blue border-google-blue/20">Centro de Comando</Badge>
           <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             Agentes Especialistas
           </h1>
@@ -200,13 +200,13 @@ export default function AuthorityAgentsRobotPage() {
                   {isRunning && <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-google-blue via-google-green to-google-yellow animate-pulse" />}
                   
                   <div className="p-5 flex-1 flex gap-4">
-                    <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border", disabled ? "bg-background text-muted-foreground" : "bg-google-blue/10 text-google-blue border-google-blue/20")}>
+                    <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border", disabled ? "bg-background text-muted-foreground" : "bg-[rgba(0,200,232,0.08)] text-google-blue border-google-blue/20")}>
                       <agent.Icon className="h-6 w-6" />
                     </div>
                     <div className="space-y-1">
                       <h3 className="font-semibold text-sm text-foreground flex items-center justify-between">
                         {agent.label}
-                        {remaining > 0 && <span className="text-[10px] font-medium text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><Timer className="h-3 w-3" /> {formatRemaining(remaining)}</span>}
+                        {remaining > 0 && <span className="text-[10px] font-medium text-google-yellow bg-google-yellow/10 px-2 py-0.5 rounded-full flex items-center gap-1"><Timer className="h-3 w-3" /> {formatRemaining(remaining)}</span>}
                       </h3>
                       <p className="text-xs text-muted-foreground leading-relaxed">{agent.desc}</p>
                     </div>

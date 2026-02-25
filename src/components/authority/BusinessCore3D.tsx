@@ -26,7 +26,7 @@ function Particles({
   burstToken = 0,
   intensity = 1,
   size = 0.038,
-  color = "#6B7CFF",
+  color = "#00C8E8",
   max = 900,
   burstCount = 90,
 }: {
@@ -207,9 +207,9 @@ function CoreSphere({
       ior: 1.35,
     });
     // @ts-ignore
-    m.color = new THREE.Color("#00d9ff");
+    m.color = new THREE.Color("#4DE8FF");
     // @ts-ignore
-    m.emissive = new THREE.Color("#0D2BFF");
+    m.emissive = new THREE.Color("#0099BB");
     // @ts-ignore
     m.emissiveIntensity = 0.08;
     return m;
@@ -223,9 +223,9 @@ function CoreSphere({
       metalness: 0.05,
     });
     // @ts-ignore
-    m.color = new THREE.Color("#244BFF");
+    m.color = new THREE.Color("#0099BB");
     // @ts-ignore
-    m.emissive = new THREE.Color("#0B2BFF");
+    m.emissive = new THREE.Color("#0099BB");
     // @ts-ignore
     m.emissiveIntensity = 0.55;
     return m;
@@ -240,7 +240,7 @@ function CoreSphere({
       side: THREE.BackSide,
     });
     // @ts-ignore
-    m.color = new THREE.Color("#8AA0FF");
+    m.color = new THREE.Color("#4DE8FF");
     return m;
   }, []);
 
@@ -253,7 +253,7 @@ function CoreSphere({
       side: THREE.BackSide,
     });
     // @ts-ignore
-    m.color = new THREE.Color("#4A6BFF");
+    m.color = new THREE.Color("#00C8E8");
     return m;
   }, []);
 
@@ -267,7 +267,7 @@ function CoreSphere({
       side: THREE.DoubleSide,
     });
     // @ts-ignore
-    m.color = new THREE.Color("#AFC0FF");
+    m.color = new THREE.Color("#A8F4FF");
     return m;
   }, []);
 
@@ -279,7 +279,7 @@ function CoreSphere({
       depthWrite: false,
     });
     // @ts-ignore
-    m.color = new THREE.Color("#7FA0FF");
+    m.color = new THREE.Color("#4DE8FF");
     return m;
   }, []);
 
@@ -390,7 +390,7 @@ function CoreSphere({
         burstToken={burstToken}
         intensity={particlesIntensity}
         size={0.042}
-        color="#6B7CFF"
+        color="#00C8E8"
         max={650}
         burstCount={70}
       />
@@ -399,7 +399,7 @@ function CoreSphere({
         burstToken={burstToken}
         intensity={particlesIntensity}
         size={0.06}
-        color="#AFC0FF"
+        color="#A8F4FF"
         max={220}
         burstCount={25}
       />
