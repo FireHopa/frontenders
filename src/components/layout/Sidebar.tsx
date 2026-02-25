@@ -78,7 +78,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-dvh border-r bg-background/55 backdrop-blur shadow-[0_0_0_1px_rgba(0,0,0,0.02)] transition-all flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar"
+        "fixed left-0 top-0 z-40 h-dvh border-r border-primary/10 bg-sidebar backdrop-blur shadow-[4px_0_24px_rgba(0,0,0,0.3)] transition-all flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar"
       )}
       style={{ width }}
     >
@@ -121,7 +121,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
                     className={cn(
                       "group flex flex-1 items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition relative",
                       "hover:bg-foreground/5",
-                      isActiveParent ? "bg-foreground/5 ring-1 ring-border/70" : "ring-1 ring-transparent"
+                      isActiveParent ? "bg-primary/10 ring-1 ring-primary/35 border-l-[3px] border-l-primary" : "ring-1 ring-transparent border-l-[3px] border-l-transparent"
                     )}
                   >
                     <motion.div initial={false} animate={{ scale: isActiveParent ? 1.02 : 1 }} transition={transitions.base} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl border shadow-soft", isActiveParent ? "bg-background/60" : "bg-background/40")}>
@@ -154,7 +154,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
                               to={sub.to}
                               className={({ isActive }) => cn(
                                 "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-                                isActive ? "bg-google-blue/10 text-google-blue font-medium" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                                isActive ? "bg-primary/12 text-google-blue font-medium" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                               )}
                             >
                               <sub.Icon className="h-4 w-4 shrink-0" />

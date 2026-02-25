@@ -4,106 +4,90 @@
 
 @layer base {
   :root {
-    /* Radius */
     --radius: 1rem;
 
-    /* Light */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* ORI Dark Tech palette */
+    --background: 223 43% 5%;        /* #080B14 */
+    --foreground: 0 0% 100%;         /* #FFFFFF */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 221 49% 11%;             /* #0E1628 */
+    --card-foreground: 0 0% 100%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 223 45% 6%;           /* #060912 */
+    --popover-foreground: 0 0% 100%;
 
-    /* shadcn primary */
-    --primary: 217 91% 60%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 188 100% 45%;         /* #00C8E8 */
+    --primary-foreground: 223 43% 5%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 219 32% 18%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 218 41% 17%;
+    --muted-foreground: 217 31% 71%; /* #A0B3CC */
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 216 50% 27%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 100% 66%;       /* #FF5050 */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%;
+    --border: 188 100% 45% / 0.18;   /* rgba(0,200,232,0.18) */
+    --input: 188 100% 45% / 0.25;
+    --ring: 188 100% 45%;
 
-    /* Google-inspired accents (not carnival) */
-    --g-blue: 217 91% 60%;
-    --g-red: 0 84% 60%;
-    --g-yellow: 45 93% 58%;
-    --g-green: 142 72% 45%;
+    /* semantic accents used across app */
+    --g-blue: 188 100% 45%;          /* cyan */
+    --g-red: 0 100% 66%;
+    --g-yellow: 39 100% 50%;
+    --g-green: 154 100% 42%;
 
-    /* Premium surfaces */
-    --glass-bg: 0 0% 100% / 0.6;
-    --glass-border: 214.3 31.8% 91.4% / 0.7;
+    --glass-bg: 221 49% 11% / 0.78;
+    --glass-border: 188 100% 45% / 0.2;
 
-    /* Shadows */
-    --shadow-soft: 0 10px 30px -20px rgba(0,0,0,0.25);
-    --shadow-card: 0 18px 45px -25px rgba(0,0,0,0.35);
+    --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --shadow-card: 0 16px 48px rgba(0, 0, 0, 0.6);
 
-    /* Micro-gradients */
-    --grad-surface: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.65));
-    --grad-hero: radial-gradient(1200px circle at 15% 10%, rgba(66,133,244,0.18), transparent 45%),
-                 radial-gradient(900px circle at 85% 20%, rgba(52,168,83,0.14), transparent 45%),
-                 radial-gradient(900px circle at 50% 95%, rgba(251,188,5,0.10), transparent 45%),
-                 radial-gradient(700px circle at 20% 70%, rgba(234,67,53,0.08), transparent 40%);
+    --grad-surface: linear-gradient(180deg, rgba(14,22,40,0.9), rgba(14,22,40,0.72));
+    --grad-hero: radial-gradient(ellipse at 70% 50%, rgba(0,200,232,0.06) 0%, transparent 70%);
+    --grad-title: linear-gradient(135deg, #00C8E8, #4DE8FF);
+    --grad-sidebar: linear-gradient(180deg, #060912 0%, #080B14 100%);
+    --grad-card-hover: linear-gradient(135deg, rgba(0,200,232,0.08), rgba(77,232,255,0.04));
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 6%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 5%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 217 91% 60%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 217 18% 18%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217 18% 16%;
-    --muted-foreground: 215 20% 70%;
-
-    --accent: 217 18% 18%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 40.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217 18% 18%;
-    --input: 217 18% 18%;
-    --ring: 217 91% 60%;
-
-    --glass-bg: 222 20% 10% / 0.55;
-    --glass-border: 217 18% 25% / 0.65;
-
-    --shadow-soft: 0 10px 30px -20px rgba(0,0,0,0.6);
-    --shadow-card: 0 18px 45px -25px rgba(0,0,0,0.7);
-
-    --grad-surface: linear-gradient(180deg, rgba(18,18,20,0.85), rgba(18,18,20,0.55));
+    /* keep dark aliasing to root tokens for compatibility */
+    --background: 223 43% 5%;
+    --foreground: 0 0% 100%;
+    --card: 221 49% 11%;
+    --card-foreground: 0 0% 100%;
+    --popover: 223 45% 6%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 188 100% 45%;
+    --primary-foreground: 223 43% 5%;
+    --secondary: 219 32% 18%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 218 41% 17%;
+    --muted-foreground: 217 31% 71%;
+    --accent: 216 50% 27%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 100% 66%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 188 100% 45% / 0.18;
+    --input: 188 100% 45% / 0.25;
+    --ring: 188 100% 45%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground antialiased; }
+
+  h1 { font-size: 3.5rem; font-weight: 800; line-height: 1.1; }
+  h2 { font-size: 2.2rem; font-weight: 700; line-height: 1.2; }
+  h3 { font-size: 1.1rem; font-weight: 700; }
+  p { color: #A0B3CC; }
 }
 
-/* Premium utility classes */
 @layer utilities {
   .glass {
     background: hsl(var(--glass-bg));
@@ -111,10 +95,18 @@
     backdrop-filter: blur(12px);
   }
   .glass-hover { @apply transition; }
-  .glass-hover:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); }
+  .glass-hover:hover {
+    box-shadow: var(--shadow-card), 0 0 20px rgba(0, 200, 232, 0.2);
+    transform: translateY(-1px);
+    background-image: var(--grad-card-hover);
+  }
   .focus-ring { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background; }
+
+  .text-gradient-cyan {
+    background: var(--grad-title);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
-
-/* Focus Mode */
 .focus-mode header, .focus-mode nav { display: none; }

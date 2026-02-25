@@ -13,7 +13,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["Inter", "Sora", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -64,6 +64,9 @@ export default {
       backgroundImage: {
         surface: "var(--grad-surface)",
         hero: "var(--grad-hero)",
+        title: "var(--grad-title)",
+        sidebar: "var(--grad-sidebar)",
+        "card-hover": "var(--grad-card-hover)",
       },
       borderRadius: {
         lg: "var(--radius)",
