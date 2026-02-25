@@ -1,4 +1,16 @@
 import * as React from "react";
+import {
+  Globe,
+  MapPin,
+  Star,
+  FileText,
+  Instagram,
+  Linkedin,
+  Youtube,
+  Sparkles,
+  ExternalLink,
+  Merge,
+} from "lucide-react";
 
 // Importando as imagens usando caminhos relativos
 import rosaImg from "../icons/rosa.png";
@@ -18,6 +30,7 @@ export type AuthorityAgentDef = {
   label: string;
   desc: string;
   Icon: React.ComponentType<{ className?: string }>;
+  SidebarIcon: React.ComponentType<{ className?: string }>; // <-- Adicionado para o menu lateral
 };
 
 // Componente Mágico: Expande para cobrir o azul e dá zoom no rosto
@@ -72,70 +85,80 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
     name: "Rosa", 
     label: "Agente Site", 
     desc: "Kit de autoridade para site (páginas, FAQ, prova social).", 
-    Icon: createIcon(rosaImg) 
+    Icon: createIcon(rosaImg),
+    SidebarIcon: Globe 
   },
   { 
     key: "google_business_profile", 
     name: "Pepe", 
     label: "Agente Perfil de Empresa no Google", 
     desc: "Otimização total do GBP (descrições, posts, avaliações).", 
-    Icon: createIcon(pepeImg) 
+    Icon: createIcon(pepeImg),
+    SidebarIcon: MapPin 
   },
   { 
     key: "social_proof", 
     name: "Lucas", 
     label: "Agente Prova social e reputação", 
     desc: "Scripts e ativos para coletar e publicar prova social.", 
-    Icon: createIcon(lucasImg) 
+    Icon: createIcon(lucasImg),
+    SidebarIcon: Star 
   },
   { 
     key: "decision_content", 
     name: "Douglas", 
     label: "Agente Conteúdos de decisão", 
     desc: "Conteúdos de fundo de funil que fecham sem prometer o impossível.", 
-    Icon: createIcon(douglasImg) 
+    Icon: createIcon(douglasImg),
+    SidebarIcon: FileText 
   },
   { 
     key: "instagram", 
     name: "George", 
     label: "Agente Instagram", 
     desc: "Plano de 30 dias + bio + Reels + carrosséis + stories.", 
-    Icon: createIcon(georgeImg) 
+    Icon: createIcon(georgeImg),
+    SidebarIcon: Instagram 
   },
   { 
     key: "linkedin", 
     name: "Monica", 
     label: "Agente LinkedIn", 
     desc: "Perfil + posts + prospecção + cases (sem inventar números).", 
-    Icon: createIcon(monicaImg) 
+    Icon: createIcon(monicaImg),
+    SidebarIcon: Linkedin 
   },
   { 
     key: "youtube", 
     name: "Liam", 
     label: "Agente YouTube", 
     desc: "Ideias, roteiros e SEO para autoridade em vídeo.", 
-    Icon: createIcon(liamImg) 
+    Icon: createIcon(liamImg),
+    SidebarIcon: Youtube 
   },
   { 
     key: "tiktok", 
     name: "Mia", 
     label: "Agente TikTok", 
     desc: "30 ideias de vídeos curtos (autoridade, prova, decisão).", 
-    Icon: createIcon(miaImg) 
+    Icon: createIcon(miaImg),
+    SidebarIcon: Sparkles 
   },
   { 
     key: "cross_platform_consistency", 
     name: "Patrícia", 
     label: "Agente Consistência", 
     desc: "Padronização de mensagens e identidade entre canais.", 
-    Icon: createIcon(patriciaImg) 
+    Icon: createIcon(patriciaImg),
+    SidebarIcon: Merge 
   },
   { 
     key: "external_mentions", 
     name: "Alex", 
     label: "Agente Menções externas", 
     desc: "Plano de PR e citações externas (portais, parcerias, releases).", 
-    Icon: createIcon(alexImg) 
+    Icon: createIcon(alexImg),
+    SidebarIcon: ExternalLink 
   }
 ];
 

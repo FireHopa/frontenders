@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/constants/app";
 import logoUrl from "@/casadoads.png";
 import { transitions } from "@/lib/motion";
+import { AUTHORITY_AGENTS } from "@/constants/authorityAgents";
 
 type Item = {
   to: string;
@@ -32,7 +33,12 @@ const items: Item[] = [
     label: "Agentes de Autoridade", 
     Icon: Sparkles,
     subItems: [
-      { to: "/authority-agents/nucleus", label: "Núcleo da Empresa", Icon: Database }
+      { to: "/authority-agents/nucleus", label: "Núcleo da Empresa", Icon: Database },
+      ...AUTHORITY_AGENTS.map((agent) => ({
+        to: `/authority-agents/run/${agent.key}`,
+        label: agent.name,
+        Icon: agent.SidebarIcon 
+      }))
     ]
   },
   { to: "/competition", label: "Análise da Concorrência", Icon: Swords },
@@ -63,6 +69,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
   }, [collapsed, onWidthChange]);
 
   const toggleSubMenu = (label: string, e: React.MouseEvent) => {
+    // REMOVIDO o e.preventDefault() para permitir a navegação da página pai!
     setExpandedMenus(prev => ({ ...prev, [label]: !prev[label] }));
   };
 
