@@ -17,7 +17,7 @@ export function LandingPage() {
       {/* Background dinâmico super expandido para cobrir telas gigantes */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-background" />
       <div aria-hidden className="pointer-events-none absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full bg-google-blue/10 blur-[140px]" />
-      <div aria-hidden className="pointer-events-none absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] max-w-[700px] max-h-[700px] rounded-full bg-google-green/10 blur-[140px]" />
+      <div aria-hidden className="pointer-events-none absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] max-w-[700px] max-h-[700px] rounded-full bg-google-blue/10 blur-[140px]" />
       
       <Particles className="absolute inset-0 z-0 opacity-60" />
 
@@ -35,7 +35,7 @@ export function LandingPage() {
                 Inteligência Artificial Premium
               </div>
               <h1 className="text-balance text-5xl font-extrabold tracking-tight md:text-6xl lg:text-7xl leading-[1.1]">
-                O Cérebro Digital da sua <span className="text-transparent bg-clip-text bg-gradient-to-r from-google-blue via-google-green to-google-yellow">Autoridade.</span>
+                O Cérebro Digital da sua <span className="text-transparent bg-clip-text bg-gradient-to-r from-google-blue via-[#4DE8FF] to-google-blue">Autoridade.</span>
               </h1>
               <p className="mt-6 max-w-xl text-pretty text-lg md:text-xl text-muted-foreground leading-relaxed">
                 Transforme seu conhecimento em um ecossistema de agentes especialistas. Uma jornada guiada para criar instruções de alto impacto, prontas para dominar as buscas e encantar clientes.
@@ -43,7 +43,7 @@ export function LandingPage() {
             </MotionInView>
 
             <MotionInView delay={0.1} className="mt-10 flex flex-col w-full sm:w-auto sm:flex-row gap-4">
-              <Button asChild variant="accent" size="lg" className="rounded-full h-14 px-8 text-base shadow-xl shadow-google-blue/20 group w-full sm:w-auto">
+              <Button asChild variant="accent" size="lg" className="rounded-full h-14 px-8 text-base shadow-xl shadow-google-blue/35 group w-full sm:w-auto">
                 <Link to="/journey">
                   Iniciar Jornada <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
@@ -58,8 +58,8 @@ export function LandingPage() {
             <MotionInView delay={0.2} className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-2xl">
               {[
                 { icon: BrainCircuit, title: "Núcleo Central", desc: "1 cérebro para 10 agentes", color: "text-google-blue", bg: "bg-google-blue/10" },
-                { icon: Zap, title: "Geração Ágil", desc: "Roteiros e posts em 1 clique", color: "text-google-yellow", bg: "bg-google-yellow/10" },
-                { icon: ShieldCheck, title: "Blindado", desc: "Respeita suas regras", color: "text-google-green", bg: "bg-google-green/10" },
+                { icon: Zap, title: "Geração Ágil", desc: "Roteiros e posts em 1 clique", color: "text-[#4DE8FF]", bg: "bg-google-blue/10" },
+                { icon: ShieldCheck, title: "Blindado", desc: "Respeita suas regras", color: "text-google-green", bg: "bg-google-green/15" },
               ].map((feat, i) => (
                 <Card key={i} className="bg-background/40 backdrop-blur-md border-border/50 p-5 rounded-3xl hover:border-border transition-colors shadow-sm flex flex-col justify-center">
                   <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center mb-4", feat.bg)}>
@@ -80,7 +80,7 @@ export function LandingPage() {
               transition={{ ...transitions.slow, delay: 0.2 }}
               className="relative w-full max-w-lg lg:max-w-none xl:ml-10"
             >
-              <div className="absolute inset-0 -z-10 rounded-[3rem] bg-gradient-to-tr from-google-blue/20 via-transparent to-google-yellow/20 blur-3xl opacity-60" />
+              <div className="absolute inset-0 -z-10 rounded-[3rem] bg-gradient-to-tr from-google-blue/30 via-transparent to-[#4DE8FF]/20 blur-3xl opacity-60" />
               <div className="rounded-[2.5rem] p-2.5 bg-gradient-to-br from-border/50 to-background/20 backdrop-blur-sm border shadow-2xl">
                 <div className="rounded-[2rem] overflow-hidden bg-background w-full">
                   <RobotsMockGrid />
@@ -116,7 +116,7 @@ export function LandingPage() {
           <MotionInView>
             <Card className="relative w-full overflow-hidden rounded-[3rem] border-0 bg-transparent shadow-2xl group mb-12">
               <div className="absolute inset-0 bg-foreground/5 backdrop-blur-xl z-0" />
-              <div className="absolute inset-0 bg-gradient-to-br from-google-blue/20 via-background to-google-green/20 z-0 opacity-80 group-hover:opacity-100 transition-opacity duration-700" />
+              <div className="absolute inset-0 bg-gradient-to-br from-google-blue/20 via-background to-[#4DE8FF]/18 z-0 opacity-80 group-hover:opacity-100 transition-opacity duration-700" />
               
               <div className="relative z-10 py-20 px-6 md:px-16 text-center flex flex-col items-center">
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
@@ -142,7 +142,7 @@ export function LandingPage() {
                 </div>
               </div>
 
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-google-blue via-google-green to-google-yellow opacity-80" />
+              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-google-blue via-[#4DE8FF] to-google-blue opacity-80" />
             </Card>
           </MotionInView>
           

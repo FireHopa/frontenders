@@ -5,19 +5,19 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-[0.95rem] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-soft hover:opacity-95",
-        secondary: "bg-secondary text-secondary-foreground hover:opacity-95",
-        outline: "border bg-background hover:bg-accent hover:text-accent-foreground",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        destructive: "bg-destructive text-destructive-foreground shadow-soft hover:opacity-95",
+        default: "bg-gradient-to-br from-primary to-[#4DE8FF] text-primary-foreground shadow-[0_0_30px_rgba(0,200,232,0.6)] hover:brightness-110",
+        secondary: "bg-secondary text-secondary-foreground border border-border hover:border-primary/60",
+        outline: "border border-primary/40 bg-background hover:bg-primary/10 hover:text-foreground",
+        ghost: "border border-primary/40 text-foreground hover:bg-primary/10",
+        destructive: "bg-destructive/15 text-destructive border border-destructive/40 shadow-soft hover:bg-destructive/20",
         glass:
           "glass text-foreground shadow-soft hover:bg-background/70",
         accent:
-          "bg-google-blue text-white shadow-soft hover:opacity-95",
+          "bg-gradient-to-br from-primary to-[#4DE8FF] text-primary-foreground shadow-[0_0_30px_rgba(0,200,232,0.6)] hover:brightness-110",
       },
       size: {
         default: "h-11 px-5",
