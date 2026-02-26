@@ -25,17 +25,6 @@ export function useClearRobotMessages(publicId: string) {
   });
 }
 
-export function useUpdateRobotMessage(publicId: string) {
-  return useMutation({
-    mutationFn: (args: { messageId: number; body: MessageUpdateIn }) =>
-      api.robots.messages.update(publicId, args.messageId, args.body),
-    onSuccess: async () => {
-      toastSuccess("Mensagem atualizada.");
-      await queryClient.invalidateQueries({ queryKey: qk.robots.messages(publicId) });
-    },
-    onError: (e) => toastApiError(e, "Falha ao atualizar mensagem"),
-  });
-}
 
 export function useRobotChat(publicId: string) {
   return useMutation({

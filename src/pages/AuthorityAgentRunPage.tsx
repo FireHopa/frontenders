@@ -94,7 +94,7 @@ export default function AuthorityAgentRunPage() {
           <h2 className="text-lg font-semibold px-1">Escolha uma ação para executar:</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             {tasks.length > 0 ? (
-              tasks.map((task, idx) => (
+              tasks.map((task: any, idx: number) => (
                 <Button 
                   key={idx} 
                   variant="outline" 

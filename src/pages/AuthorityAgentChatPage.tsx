@@ -74,7 +74,7 @@ export default function AuthorityAgentChatPage() {
   
   const taskLabels = React.useMemo(() => {
     const tasks = tasksByAgentKey(agentKey);
-    if (tasks.length > 0) return tasks.map((t) => t.title);
+    if (tasks.length > 0) return tasks.map((t: any) => t.title);
     return ICEBREAKERS_GENERIC;
   }, [agentKey]);
 
@@ -195,7 +195,7 @@ export default function AuthorityAgentChatPage() {
                 <div className="grid h-full w-full grid-cols-[1fr_auto_1fr] gap-6 p-6">
                   {/* coluna esquerda */}
                   <div className="flex min-w-0 flex-col items-end gap-3 overflow-y-auto pr-1">
-                    {leftLabels.map((label) => (
+                    {leftLabels.map((label: any) => (
                       <button
                         key={`l-${label}`}
                         type="button"
@@ -241,7 +241,7 @@ export default function AuthorityAgentChatPage() {
 
                   {/* coluna direita */}
                   <div className="flex min-w-0 flex-col items-start gap-3 overflow-y-auto pl-1">
-                    {rightLabels.map((label) => (
+                    {rightLabels.map((label: any) => (
                       <button
                         key={`r-${label}`}
                         type="button"

@@ -162,6 +162,7 @@
   .text-gradient-cyan {
     background: linear-gradient(135deg, #00C8E8, #4DE8FF);
     -webkit-background-clip: text;
+  background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 

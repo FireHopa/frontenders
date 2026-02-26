@@ -24,15 +24,6 @@ export type AuthorityAgentRunItem = {
   created_at: string;
 };
 
-export type AuthorityAgentHistoryOut = {
-  items: AuthorityAgentRunItem[];
-};
-
-export type AuthorityAgentRunGlobalIn = {
-  client_id: string;
-  agent_key: string;
-  nucleus: Record<string, any>;
-};
 
 export const api = {
   health: () => http<HealthResponse>("/api/health"),
@@ -88,8 +79,8 @@ export const api = {
 
   authorityAgents: {
     historyGlobal: (clientId: string) =>
-      http<AuthorityAgentHistoryOut>(`/api/authority-agents/history?client_id=${encodeURIComponent(clientId)}`),
-    runGlobal: (payload: AuthorityAgentRunGlobalIn) =>
+      http(`/api/authority-agents/history?client_id=${encodeURIComponent(clientId)}`),
+    runGlobal: (payload: any) =>
       http<AuthorityAgentRunItem>(`/api/authority-agents/run`, { method: "POST", json: payload }),
 
     runById: (clientId: string, runId: number) =>
