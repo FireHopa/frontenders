@@ -24,6 +24,9 @@ const AuthorityAgentChatPage = withSuspense(React.lazy(() => import("@/pages/Aut
 const AuthorityNucleusPage = withSuspense(React.lazy(() => import("@/pages/AuthorityNucleusPage")));
 const NotFoundPage = withSuspense(React.lazy(() => import("@/pages/NotFoundPage")));
 
+// NOVO: Importação da página de conta (agora com lazy loading para manter o teu padrão)
+const AccountPage = withSuspense(React.lazy(() => import("@/pages/AccountPage")));
+
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
@@ -41,6 +44,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "journey", element: <JourneyPage /> }, // <-- Clicou em iniciar, cai aqui e é barrado se não logar
           { path: "dashboard", element: <DashboardPage /> },
+          { path: "conta", element: <AccountPage /> }, // <-- NOVA ROTA AQUI!
           { path: "robots/:publicId", element: <RobotDetailPage /> },
           { path: "robots/:publicId/chat", element: <RobotChatPage /> },
           { path: "competition", element: <CompetitionPage /> },

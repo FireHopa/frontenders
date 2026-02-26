@@ -14,7 +14,6 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Critérios bobos para palavra-passe forte
   const isPasswordStrong = (pw: string) => {
     const hasUpperCase = /[A-Z]/.test(pw);
     const hasNumber = /[0-9]/.test(pw);
@@ -38,7 +37,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const data = await authService.register(email, password, name);
-      setAuth(data.access_token, { email: data.user_email, name: data.user_name });
+      // NOVO: A passar os créditos para o estado global
+      setAuth(data.access_token, { email: data.user_email, name: data.user_name, credits: data.credits });
       navigate("/"); 
     } catch (err: any) {
       setError(err.message || "Erro ao criar conta.");

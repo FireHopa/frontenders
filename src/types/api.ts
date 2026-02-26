@@ -152,9 +152,10 @@ export interface AuthorityAgentRunGlobalRequest {
   nucleus: BusinessCoreIn;
 }
 
+// ATUALIZADO: Reflete exatamente o que o FastAPI devolve (AuthorityAgentRunOut)
 export interface AuthorityAgentRunResponse {
+  id: number;
   agent_key: string;
-  agent_name: string;
-  cooldown_seconds: number;
-  output: string;
+  output_text: string;
+  created_at: string;
 }

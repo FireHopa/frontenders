@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
@@ -11,13 +11,16 @@ import {
   PanelLeftOpen,
   Sparkles,
   ChevronDown,
-  Database
+  Database,
+  LogOut,
+  Coins
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/constants/app";
 import logoUrl from "@/casadoads.png";
 import { transitions } from "@/lib/motion";
 import { AUTHORITY_AGENTS } from "@/constants/authorityAgents";
+import { useAuthStore } from "@/state/authStore";
 
 type Item = {
   to: string;
@@ -63,14 +66,23 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
     "Agentes de Autoridade": location.pathname.includes("/authority-agents")
   });
   
+  // AUTENTICAÇÃO E DADOS DA CONTA
+  const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
+
   React.useEffect(() => {
     saveCollapsed(collapsed);
     onWidthChange?.(collapsed ? 84 : 268);
   }, [collapsed, onWidthChange]);
 
   const toggleSubMenu = (label: string, e: React.MouseEvent) => {
-    // REMOVIDO o e.preventDefault() para permitir a navegação da página pai!
     setExpandedMenus(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault();
+    logout();
+    navigate("/");
   };
 
   const width = collapsed ? 84 : 268;
@@ -154,7 +166,7 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
                               to={sub.to}
                               className={({ isActive }) => cn(
                                 "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-                                isActive ? "bg-[rgba(0,200,232,0.12)] text-google-blue font-medium shadow-[inset_3px_0_0_0_#00C8E8]" : "text-muted-foreground hover:bg-[rgba(0,200,232,0.10)] hover:text-foreground"
+                                isActive ? "bg-[rgba(0,200,232,0.12)] text-[#00C8E8] font-medium shadow-[inset_3px_0_0_0_#00C8E8]" : "text-muted-foreground hover:bg-[rgba(0,200,232,0.10)] hover:text-foreground"
                               )}
                             >
                               <sub.Icon className="h-4 w-4 shrink-0" />
@@ -171,16 +183,68 @@ export function Sidebar({ onWidthChange }: { onWidthChange?: (w: number) => void
           })}
         </div>
 
-        <div className="mt-4 rounded-2xl border bg-background/40 p-4 shadow-soft">
-          {!collapsed ? (
-            <>
-              <div className="text-xs font-semibold">Cérebro Central</div>
-              <div className="mt-1 text-xs text-muted-foreground">Acesse Agentes de Autoridade para rodar scripts e gerar conteúdos.</div>
-            </>
-          ) : (
-            <div className="grid place-items-center text-xs text-muted-foreground">•</div>
-          )}
-        </div>
+        {/* -----------------------------------------------------
+            FOOTER DA SIDEBAR: CRÉDITOS E PERFIL DO UTILIZADOR
+            ----------------------------------------------------- */}
+        {user && (
+          <div className="mt-4 flex flex-col gap-2 border-t border-[rgba(0,200,232,0.08)] pt-4 pb-1">
+            {!collapsed ? (
+              <>
+                {/* Tag de Créditos */}
+                <div className="flex items-center justify-center gap-2 rounded-xl bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-500 border border-blue-500/20">
+                  <Coins className="h-4 w-4" />
+                  <span>{user.credits ?? 0} Créditos</span>
+                </div>
+
+                {/* Link para Minha Conta */}
+                <Link
+                  to="/conta"
+                  className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-[rgba(0,200,232,0.10)] cursor-pointer mt-1"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#00C8E8] font-bold text-white shadow-md">
+                    {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="truncate text-sm font-semibold text-foreground">
+                      {user.name?.split(" ")[0] || "Usuário"}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {user.email}
+                    </span>
+                  </div>
+                </Link>
+
+                {/* Botão de Sair */}
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-500/10 py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-500/20 mt-1"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sair
+                </button>
+              </>
+            ) : (
+              // Versão Colapsada
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center justify-center rounded-xl bg-blue-500/10 h-10 w-10 text-blue-500 border border-blue-500/20" title={`${user.credits ?? 0} Créditos`}>
+                  <Coins className="h-5 w-5" />
+                </div>
+                <Link to="/conta" title="Minha Conta">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#00C8E8] font-bold text-white shadow-md hover:ring-2 ring-[#00C8E8]/50 transition">
+                    {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                  </div>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  title="Sair"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-500 transition hover:bg-red-500/20"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );

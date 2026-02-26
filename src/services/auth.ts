@@ -5,6 +5,7 @@ export interface TokenResponse {
   token_type: string;
   user_email: string;
   user_name?: string;
+  credits: number; // NOVO: Backend agora devolve os créditos
 }
 
 export const authService = {
@@ -29,9 +30,9 @@ export const authService = {
     });
   },
   
-  // Utilidade para checar se o token atual ainda é válido no backend
   checkMe: async () => {
-    return http<{ email: string; full_name?: string; google_id?: string }>("/api/auth/me", {
+    // NOVO: Adicionado o campo credits no retorno esperado
+    return http<{ email: string; full_name?: string; google_id?: string; credits: number }>("/api/auth/me", {
       method: "GET",
     });
   }

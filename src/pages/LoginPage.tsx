@@ -18,8 +18,9 @@ export default function LoginPage() {
     setError("");
     try {
       const data = await authService.login(email, password);
-      setAuth(data.access_token, { email: data.user_email, name: data.user_name });
-      navigate("/"); // Volta para o início após sucesso
+      // NOVO: A passar os créditos para o estado global
+      setAuth(data.access_token, { email: data.user_email, name: data.user_name, credits: data.credits });
+      navigate("/"); 
     } catch (err: any) {
       setError(err.message || "Erro ao iniciar sessão.");
     } finally {
@@ -32,7 +33,8 @@ export default function LoginPage() {
       try {
         setLoading(true);
         const data = await authService.googleLogin(tokenResponse.access_token);
-        setAuth(data.access_token, { email: data.user_email, name: data.user_name });
+        // NOVO: A passar os créditos no Google Login
+        setAuth(data.access_token, { email: data.user_email, name: data.user_name, credits: data.credits });
         navigate("/");
       } catch (err: any) {
         setError("Erro ao autenticar com o Google.");
