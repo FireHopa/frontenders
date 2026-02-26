@@ -28,6 +28,22 @@ export async function http<T>(path: string, init: RequestInitWithJson = {}): Pro
   const url = `${API_BASE_URL}${path}`;
   const headers = new Headers(init.headers);
 
+  // --- NOVA LÓGICA DE AUTENTICAÇÃO ---
+  // Pega o token salvo no localStorage silenciosamente e anexa no cabeçalho
+  const authStorageStr = localStorage.getItem("auth-store");
+  if (authStorageStr) {
+    try {
+      const authData = JSON.parse(authStorageStr);
+      const token = authData?.state?.token;
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+    } catch (e) {
+      console.error("Erro ao ler token", e);
+    }
+  }
+  // -----------------------------------
+
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");
   }
@@ -40,6 +56,17 @@ export async function http<T>(path: string, init: RequestInitWithJson = {}): Pro
 
   if (!res.ok) {
     const payload = await parseJsonSafe(res);
+    
+    // --- INTERCEPTA ERRO 401 (NÃO AUTORIZADO) ---
+    // Se a rota exigia login e não passou, limpa o token falso/velho e expulsa pro login
+    if (res.status === 401) {
+      localStorage.removeItem("auth-store");
+      if (window.location.pathname !== "/login" && window.location.pathname !== "/register") {
+        window.location.href = "/login";
+      }
+    }
+    // ---------------------------------------------
+
     const message =
       (payload && typeof payload === "object" && "detail" in payload && String((payload as any).detail)) ||
       `HTTP ${res.status}`;
