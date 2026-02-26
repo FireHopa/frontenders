@@ -1,24 +1,29 @@
 import { http } from "./http";
 
-
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user_email: string;
+  user_name?: string;
+}
 
 export const authService = {
   login: async (email: string, password: string) => {
-    return http("/api/auth/login", {
+    return http<TokenResponse>("/api/auth/login", {
       method: "POST",
       json: { email, password },
     });
   },
   
   register: async (email: string, password: string, full_name?: string) => {
-    return http("/api/auth/register", {
+    return http<TokenResponse>("/api/auth/register", {
       method: "POST",
       json: { email, password, full_name },
     });
   },
   
   googleLogin: async (credential: string) => {
-    return http("/api/auth/google", {
+    return http<TokenResponse>("/api/auth/google", {
       method: "POST",
       json: { credential },
     });

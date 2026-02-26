@@ -31,7 +31,7 @@ export function AuthorityMeter({ systemInstructions }: { systemInstructions: str
         </Progress.Root>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          {signals.map((sig: any) => (
+          {signals.map((sig) => (
             <div
               key={sig.id}
               className="flex items-center justify-between rounded-2xl border bg-background/40 px-3 py-2 text-xs shadow-soft"

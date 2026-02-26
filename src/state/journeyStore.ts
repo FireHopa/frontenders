@@ -44,9 +44,13 @@ export function journeyReducer(state: JourneyState, action: JourneyAction): Jour
   }
 }
 
-
+export function isFieldRequired(field: BriefingField): boolean {
+  // required = not optional in config
+  return !JOURNEY_STEPS.find((s) => s.id === field)?.optional;
+}
 
 export function validateField(field: BriefingField, value: string): string | null {
+  if (!isFieldRequired(field)) return null;
   if (value.trim().length === 0) return "Campo obrigatório.";
   if (value.trim().length < 2) return "Muito curto.";
   return null;

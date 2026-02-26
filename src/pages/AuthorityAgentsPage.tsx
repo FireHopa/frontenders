@@ -143,7 +143,7 @@ export default function AuthorityAgentsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {historyData.items.map((item: any) => {
+              {historyData.items.map((item) => {
                 const agent = AUTHORITY_AGENTS.find((a) => a.key === item.agent_key);
                 const AgentIcon = agent?.Icon || Sparkles;
 

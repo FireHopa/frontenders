@@ -1,4 +1,4 @@
-
+export type ISODateString = string;
 
 export interface HealthResponse {
   ok: boolean;
@@ -6,20 +6,20 @@ export interface HealthResponse {
 }
 
 export interface RobotOut {
-  created_at?: string;
   public_id: string;
   title: string;
   description: string;
   avatar_data?: string | null;
+  created_at: ISODateString;
 }
 
 export interface RobotDetail {
-  created_at?: string;
   public_id: string;
   title: string;
   description: string;
   avatar_data?: string | null;
   system_instructions: string;
+  created_at: ISODateString;
   knowledge_files_json?: string; // NOVO CAMPO
 }
 
@@ -52,10 +52,10 @@ export interface ChatIn {
 }
 
 export interface ChatMessageOut {
-  created_at?: string;
   id: number;
   role: "user" | "assistant";
   content: string;
+  created_at: ISODateString;
 }
 
 export interface MessageUpdateIn {
@@ -110,6 +110,8 @@ export interface BusinessCoreOut {
   linkedin: string;
   youtube: string;
   tiktok: string;
+
+  updated_at: ISODateString;
   knowledge_text?: string;
   knowledge_files_json?: string;
 }
@@ -142,6 +144,12 @@ export interface AuthorityAgentRunRequest {
   client_id: string;
   agent_key: string;
   nucleus: BusinessCoreIn | Record<string, any>;
+}
+
+export interface AuthorityAgentRunGlobalRequest {
+  client_id: string;
+  agent_key: string;
+  nucleus: BusinessCoreIn;
 }
 
 export interface AuthorityAgentRunResponse {

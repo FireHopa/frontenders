@@ -30,9 +30,20 @@ export type CompetitionFindIn = {
   brand_words?: string[];
 };
 
+export type CompetitionFindRequest = {
+  briefing: CompetitionFindIn;
+};
+
+export type CompetitorSuggestion = {
+  name: string;
+  website_url: string;
+  instagram?: string | null;
+  reason: string;
+  confidence: number;
+};
 
 export type CompetitionFindOut = {
-  suggestions: [];
+  suggestions: CompetitorSuggestion[];
   sources?: { title: string; url: string; snippet?: string }[];
   note?: string;
   data_quality?: "ok" | "incomplete";
