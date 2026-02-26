@@ -112,54 +112,30 @@ export function getClientId(): string {
 export async function uploadRobotKnowledgeFile(publicId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const response = await fetch(`${baseUrl}/api/robots/${publicId}/upload-knowledge`, {
+  return http(`/api/robots/${publicId}/upload-knowledge`, {
     method: "POST",
     body: formData,
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || "Erro ao fazer upload do arquivo para o robô.");
-  }
-  return response.json();
 }
 
 export async function uploadBusinessCoreKnowledgeFile(publicId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const response = await fetch(`${baseUrl}/api/robots/${publicId}/business-core/upload-knowledge`, {
+  return http(`/api/robots/${publicId}/business-core/upload-knowledge`, {
     method: "POST",
     body: formData,
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || "Erro ao fazer upload do arquivo para o núcleo.");
-  }
-  return response.json();
 }
 
 // NOVAS FUNÇÕES PARA DELETAR
 export async function deleteRobotKnowledgeFile(publicId: string, filename: string) {
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const response = await fetch(`${baseUrl}/api/robots/${publicId}/knowledge-files/${encodeURIComponent(filename)}`, {
+  return http(`/api/robots/${publicId}/knowledge-files/${encodeURIComponent(filename)}`, {
     method: "DELETE",
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || "Erro ao excluir o arquivo do robô.");
-  }
-  return response.json();
 }
 
 export async function deleteBusinessCoreKnowledgeFile(publicId: string, filename: string) {
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const response = await fetch(`${baseUrl}/api/robots/${publicId}/business-core/files/${encodeURIComponent(filename)}`, {
+  return http(`/api/robots/${publicId}/business-core/files/${encodeURIComponent(filename)}`, {
     method: "DELETE",
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || "Erro ao excluir o arquivo do núcleo.");
-  }
-  return response.json();
 }

@@ -82,7 +82,7 @@ const createIcon = (src: string) => {
 export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   { 
     key: "site", 
-    name: "Rosa", 
+    name: "Rosa - Site", 
     label: "Agente Site", 
     desc: "Kit de autoridade para site (páginas, FAQ, prova social).", 
     Icon: createIcon(rosaImg),
@@ -90,7 +90,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "google_business_profile", 
-    name: "Pepe", 
+    name: "Pepe - Perfil de Empresa", 
     label: "Agente Perfil de Empresa no Google", 
     desc: "Otimização total do GBP (descrições, posts, avaliações).", 
     Icon: createIcon(pepeImg),
@@ -98,7 +98,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "social_proof", 
-    name: "Lucas", 
+    name: "Lucas - Prova Social", 
     label: "Agente Prova social e reputação", 
     desc: "Scripts e ativos para coletar e publicar prova social.", 
     Icon: createIcon(lucasImg),
@@ -106,7 +106,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "decision_content", 
-    name: "Douglas", 
+    name: "Douglas - Conteúdos de Decisão", 
     label: "Agente Conteúdos de decisão", 
     desc: "Conteúdos de fundo de funil que fecham sem prometer o impossível.", 
     Icon: createIcon(douglasImg),
@@ -114,7 +114,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "instagram", 
-    name: "George", 
+    name: "George - Instagram", 
     label: "Agente Instagram", 
     desc: "Plano de 30 dias + bio + Reels + carrosséis + stories.", 
     Icon: createIcon(georgeImg),
@@ -122,7 +122,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "linkedin", 
-    name: "Monica", 
+    name: "Monica - LinkedIn", 
     label: "Agente LinkedIn", 
     desc: "Perfil + posts + prospecção + cases (sem inventar números).", 
     Icon: createIcon(monicaImg),
@@ -130,7 +130,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "youtube", 
-    name: "Liam", 
+    name: "Liam - Youtube", 
     label: "Agente YouTube", 
     desc: "Ideias, roteiros e SEO para autoridade em vídeo.", 
     Icon: createIcon(liamImg),
@@ -138,7 +138,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "tiktok", 
-    name: "Mia", 
+    name: "Mia - Tiktok", 
     label: "Agente TikTok", 
     desc: "30 ideias de vídeos curtos (autoridade, prova, decisão).", 
     Icon: createIcon(miaImg),
@@ -146,7 +146,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "cross_platform_consistency", 
-    name: "Patrícia", 
+    name: "Patrícia - Consistência Digital", 
     label: "Agente Consistência", 
     desc: "Padronização de mensagens e identidade entre canais.", 
     Icon: createIcon(patriciaImg),
@@ -154,7 +154,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
   },
   { 
     key: "external_mentions", 
-    name: "Alex", 
+    name: "Alex - Menções externas", 
     label: "Agente Menções externas", 
     desc: "Plano de PR e citações externas (portais, parcerias, releases).", 
     Icon: createIcon(alexImg),

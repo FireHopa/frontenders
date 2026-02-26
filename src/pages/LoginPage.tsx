@@ -1,109 +1,176 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useGoogleLogin } from "@react-oauth/google";
-import { authService } from "@/services/auth";
-import { useAuthStore } from "@/state/authStore";
+import { useState, useRef } from "react";
+import { Upload, FileText, Loader2, CheckCircle2, Trash2, File } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { 
+  uploadRobotKnowledgeFile, 
+  uploadBusinessCoreKnowledgeFile,
+  deleteRobotKnowledgeFile,
+  deleteBusinessCoreKnowledgeFile
+} from "@/services/robots";
 
-export default function LoginPage() {
-  const navigate = useNavigate();
-  const setAuth = useAuthStore((state) => state.setAuth);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+interface KnowledgeUploaderProps {
+  publicId: string;
+  type: "robot" | "business-core";
+  existingFilesJson?: string | null;
+  onUploadSuccess?: () => void;
+}
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadSuccess }: KnowledgeUploaderProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadedFiles: Array<{ filename: string; uploaded_at: string }> = 
+    existingFilesJson ? JSON.parse(existingFilesJson) : [];
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validExtensions = ["pdf", "docx", "txt", "md", "csv"];
+    const ext = file.name.split('.').pop()?.toLowerCase() || "";
+    
+    if (!validExtensions.includes(ext)) {
+      toast.error("Formato inválido. Use PDF, DOCX, TXT, MD ou CSV.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("O arquivo é muito grande. O limite é de 5MB.");
+      return;
+    }
+
     try {
-      const data = await authService.login(email, password);
-      // NOVO: A passar os créditos para o estado global
-      setAuth(data.access_token, { email: data.user_email, name: data.user_name, credits: data.credits });
-      navigate("/"); 
-    } catch (err: any) {
-      setError(err.message || "Erro ao iniciar sessão.");
+      setIsUploading(true);
+      if (type === "robot") {
+        await uploadRobotKnowledgeFile(publicId, file);
+      } else {
+        await uploadBusinessCoreKnowledgeFile(publicId, file);
+      }
+      toast.success(`Arquivo ${file.name} processado e aprendido com sucesso!`);
+      if (onUploadSuccess) onUploadSuccess();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao processar arquivo.");
     } finally {
-      setLoading(false);
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const loginWithGoogle = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        setLoading(true);
-        const data = await authService.googleLogin(tokenResponse.access_token);
-        // NOVO: A passar os créditos no Google Login
-        setAuth(data.access_token, { email: data.user_email, name: data.user_name, credits: data.credits });
-        navigate("/");
-      } catch (err: any) {
-        setError("Erro ao autenticar com o Google.");
-        setLoading(false);
+  const handleDelete = async (filename: string) => {
+    try {
+      setDeletingFile(filename);
+      if (type === "robot") {
+        await deleteRobotKnowledgeFile(publicId, filename);
+      } else {
+        await deleteBusinessCoreKnowledgeFile(publicId, filename);
       }
-    },
-    onError: () => setError("O início de sessão com o Google falhou."),
-  });
+      toast.success("Arquivo removido do cérebro com sucesso!");
+      if (onUploadSuccess) onUploadSuccess();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao excluir arquivo.");
+    } finally {
+      setDeletingFile(null);
+    }
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4">
-      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl">
-        <h2 className="mb-6 text-center text-3xl font-bold text-white">Iniciar Sessão</h2>
-        
-        {error && <div className="mb-4 rounded bg-red-500/10 p-3 text-sm text-red-500">{error}</div>}
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-400">E-mail</label>
-            <input
-              type="email"
-              required
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white focus:border-blue-500 focus:outline-none"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+    <Card className="border-border/60 bg-background/50 backdrop-blur-sm shadow-sm flex flex-col h-fit overflow-hidden transition-all duration-200 hover:shadow-md">
+      <CardHeader className="pb-5 border-b border-border/30 bg-muted/10">
+        <CardTitle className="text-lg font-bold flex items-center gap-3">
+          <div className="p-2 bg-google-blue/10 rounded-xl">
+            <FileText className="w-5 h-5 text-google-blue" />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-400">Palavra-passe</label>
-            <input
-              type="password"
-              required
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white focus:border-blue-500 focus:outline-none"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+          Base de Conhecimento
+        </CardTitle>
+        <CardDescription className="text-sm mt-2 leading-relaxed">
+          Faça upload de materiais para treinar a inteligência. O conteúdo será absorvido pelos agentes.
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent className="p-5 flex flex-col gap-6">
+        {/* Área de Upload Estilo Dropzone */}
+        <div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept=".pdf,.docx,.txt,.md,.csv"
+          />
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || deletingFile !== null}
+            className={cn(
+              "w-full relative group flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border/60 bg-muted/20 p-8 text-center transition-all duration-200",
+              "hover:bg-google-blue/5 hover:border-google-blue/40 hover:shadow-sm cursor-pointer",
+              "disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-muted/20 disabled:hover:border-border/60"
+            )}
           >
-            {loading ? "A entrar..." : "Entrar"}
+            <div className="p-4 bg-background shadow-sm rounded-full group-hover:scale-105 transition-transform duration-200">
+              {isUploading ? (
+                <Loader2 className="w-6 h-6 text-google-blue animate-spin" />
+              ) : (
+                <Upload className="w-6 h-6 text-muted-foreground group-hover:text-google-blue transition-colors" />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {isUploading ? "Lendo documento..." : "Clique para anexar arquivo"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5 font-medium">
+                PDF, DOCX, TXT ou CSV (Max. 5MB)
+              </p>
+            </div>
           </button>
-        </form>
-
-        <div className="my-6 flex items-center text-zinc-500">
-          <div className="flex-1 border-t border-zinc-700"></div>
-          <span className="mx-4 text-sm">ou</span>
-          <div className="flex-1 border-t border-zinc-700"></div>
         </div>
 
-        <button
-          onClick={() => loginWithGoogle()}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 p-3 font-medium text-white transition hover:bg-zinc-700"
-        >
-          <svg className="h-5 w-5" viewBox="0 0 24 24">
-            <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-          Continuar com o Google
-        </button>
-
-        <p className="mt-6 text-center text-sm text-zinc-400">
-          Ainda não tem conta? <Link to="/register" className="text-blue-500 hover:underline">Registe-se aqui</Link>
-        </p>
-      </div>
-    </div>
+        {/* Lista de Arquivos */}
+        {uploadedFiles.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between pb-2 border-b border-border/40">
+              Arquivos Aprendidos
+              <Badge variant="secondary" className="bg-google-blue/10 text-google-blue hover:bg-google-blue/20">
+                {uploadedFiles.length}
+              </Badge>
+            </h4>
+            
+            <div className="grid gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+              {uploadedFiles.map((f, i) => (
+                <div key={i} className="flex items-center gap-3 text-sm bg-background/80 p-3.5 rounded-xl border border-border/50 group min-w-0 transition-all hover:border-google-blue/30 hover:shadow-sm">
+                  <div className="p-1.5 bg-[#00D278]/10 rounded-lg shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-[#00D278]" />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <span className="font-semibold text-foreground truncate" title={f.filename}>
+                      {f.filename}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground truncate font-medium">
+                      {new Date(f.uploaded_at).toLocaleDateString()} às {new Date(f.uploaded_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  </div>
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                    disabled={deletingFile === f.filename}
+                    onClick={() => handleDelete(f.filename)}
+                    title="Remover arquivo"
+                  >
+                    {deletingFile === f.filename ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

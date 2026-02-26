@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { 
   uploadRobotKnowledgeFile, 
   uploadBusinessCoreKnowledgeFile,
@@ -50,7 +51,7 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
       } else {
         await uploadBusinessCoreKnowledgeFile(publicId, file);
       }
-      toast.success(`Arquivo ${file.name} processado e aprendido com sucesso!`);
+      toast.success(`Arquivo ${file.name} processado com sucesso!`);
       if (onUploadSuccess) onUploadSuccess();
     } catch (error: any) {
       toast.error(error.message || "Erro ao processar arquivo.");
@@ -78,47 +79,84 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
   };
 
   return (
-    <Card className="border-border/50 bg-muted/20 shadow-soft h-full flex flex-col">
-      <CardHeader className="pb-4 border-b border-border/40 bg-background/50">
-        <CardTitle className="text-xl flex items-center gap-2">
-          <FileText className="w-6 h-6 text-google-blue" />
+    <Card className="border-border/60 bg-card shadow-lg flex flex-col h-fit">
+      <CardHeader className="pb-5 border-b border-border/40 bg-muted/20">
+        <CardTitle className="text-lg flex items-center gap-2 font-bold">
+          <div className="p-2 bg-google-blue/10 rounded-lg">
+            <FileText className="w-5 h-5 text-google-blue" />
+          </div>
           Base de Conhecimento
         </CardTitle>
-        <CardDescription className="text-sm">
-          Faça upload de PDFs, DOCX ou TXT para treinar a inteligência com materiais específicos.
+        <CardDescription className="text-sm mt-1">
+          Faça upload de PDFs, DOCX ou TXT para treinar a inteligência.
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="p-6 flex-1 flex flex-col">
+      <CardContent className="p-6 space-y-6">
+        
+        {/* Nova Área de Upload (Dropzone visual) */}
+        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept=".pdf,.docx,.txt,.md,.csv"
+          />
+          <div className={cn(
+            "w-full rounded-2xl border-2 border-dashed border-border/60 bg-muted/30 hover:bg-muted/60 transition-all flex flex-col items-center justify-center gap-3 p-8 text-center",
+            isUploading || deletingFile !== null ? "opacity-50 cursor-not-allowed pointer-events-none" : "hover:border-google-blue/50"
+          )}>
+            <div className="p-3 bg-background rounded-full shadow-sm">
+              {isUploading ? (
+                <Loader2 className="h-6 w-6 animate-spin text-google-blue" />
+              ) : (
+                <Upload className="h-6 w-6 text-muted-foreground group-hover:text-google-blue transition-colors" />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {isUploading ? "Processando arquivo..." : "Clique para anexar arquivo"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Máx. 5MB (PDF, DOCX, TXT)</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de Arquivos fica fixada abaixo, não empurra o botão pro fundo */}
         {uploadedFiles.length > 0 && (
-          <div className="space-y-3 mb-6 flex-1">
-            <h4 className="text-sm font-semibold text-muted-foreground flex items-center justify-between">
-              Arquivos Atuais 
-              <Badge variant="secondary" className="bg-background">{uploadedFiles.length}</Badge>
-            </h4>
+          <div className="space-y-3 pt-2 border-t border-border/40">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Arquivos Aprendidos
+              </h4>
+              <Badge variant="secondary" className="bg-muted text-xs rounded-full px-2">
+                {uploadedFiles.length}
+              </Badge>
+            </div>
             
-            {/* O max-h e overflow-y garantem que a lista role e não empurre a página infinitamente */}
-            <div className="grid gap-2 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+            <div className="grid gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
               {uploadedFiles.map((f, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm bg-background p-3 rounded-xl border group min-w-0 transition-colors hover:border-google-blue/30 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5 text-[#00D278] shrink-0" />
+                <div key={i} className="flex items-center gap-3 bg-background p-3 rounded-xl border border-border/50 group hover:border-google-blue/30 hover:shadow-sm transition-all min-w-0">
+                  <div className="p-1.5 bg-green-500/10 rounded-md shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-500" />
+                  </div>
                   
-                  {/* O min-w-0 aqui impede o nome do arquivo de quebrar a tela inteira! */}
                   <div className="flex-1 min-w-0 flex flex-col">
-                    <span className="font-semibold text-foreground truncate" title={f.filename}>
+                    <span className="font-semibold text-sm text-foreground truncate" title={f.filename}>
                       {f.filename}
                     </span>
                     <span className="text-[10px] text-muted-foreground truncate">
-                      Anexado em: {new Date(f.uploaded_at).toLocaleString()}
+                      {new Date(f.uploaded_at).toLocaleString()}
                     </span>
                   </div>
                   
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 shrink-0 text-[#FF5050] hover:text-[#FF5050] hover:bg-[rgba(255,80,80,0.15)] dark:hover:bg-red-950/30 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                    className="h-8 w-8 shrink-0 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-600"
                     disabled={deletingFile === f.filename}
-                    onClick={() => handleDelete(f.filename)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(f.filename); }}
                     title="Excluir arquivo"
                   >
                     {deletingFile === f.filename ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -129,34 +167,6 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
           </div>
         )}
 
-        <div className="flex items-center gap-4 mt-auto pt-4">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept=".pdf,.docx,.txt,.md,.csv"
-          />
-          <Button 
-            variant="accent" 
-            size="lg"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading || deletingFile !== null}
-            className="w-full rounded-xl shadow-sm h-14 text-base"
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Lendo e processando arquivo...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-5 w-5" />
-                Anexar Novo Arquivo
-              </>
-            )}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );
