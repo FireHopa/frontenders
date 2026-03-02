@@ -3,8 +3,6 @@ import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
 import { withSuspense } from "@/app/Lazy";
-
-// 1. IMPORTA O GUARDIÃO
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 
 const LoginPage = withSuspense(React.lazy(() => import("@/pages/LoginPage")));
@@ -23,13 +21,18 @@ const AuthorityAgentRunPage = withSuspense(React.lazy(() => import("@/pages/Auth
 const AuthorityAgentChatPage = withSuspense(React.lazy(() => import("@/pages/AuthorityAgentChatPage")));
 const AuthorityNucleusPage = withSuspense(React.lazy(() => import("@/pages/AuthorityNucleusPage")));
 const NotFoundPage = withSuspense(React.lazy(() => import("@/pages/NotFoundPage")));
-
-// NOVO: Importação da página de conta (agora com lazy loading para manter o teu padrão)
 const AccountPage = withSuspense(React.lazy(() => import("@/pages/AccountPage")));
+
+// NOVO: Importação da página de callback do LinkedIn
+const LinkedInCallbackPage = withSuspense(React.lazy(() => import("@/pages/LinkedInCallbackPage")));
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
+  
+  // NOVO: Rota do Callback fora do AppShell para não mostrar menu lateral enquanto carrega
+  { path: "/api/linkedin/callback", element: <LinkedInCallbackPage /> },
+
   {
     path: "/",
     element: <AppShell />,
@@ -40,11 +43,11 @@ export const router = createBrowserRouter([
 
       // 🔴 ROTAS PROTEGIDAS (O Guardião bloqueia se não tiver token)
       {
-        element: <ProtectedRoute />, // <-- Envelopando as rotas abaixo
+        element: <ProtectedRoute />, 
         children: [
-          { path: "journey", element: <JourneyPage /> }, // <-- Clicou em iniciar, cai aqui e é barrado se não logar
+          { path: "journey", element: <JourneyPage /> }, 
           { path: "dashboard", element: <DashboardPage /> },
-          { path: "conta", element: <AccountPage /> }, // <-- NOVA ROTA AQUI!
+          { path: "conta", element: <AccountPage /> }, 
           { path: "robots/:publicId", element: <RobotDetailPage /> },
           { path: "robots/:publicId/chat", element: <RobotChatPage /> },
           { path: "competition", element: <CompetitionPage /> },

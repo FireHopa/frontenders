@@ -4,7 +4,8 @@ import { persist } from "zustand/middleware";
 export interface User {
   email: string;
   name?: string | null;
-  credits: number; // NOVO: Controle de créditos diários
+  credits: number; 
+  has_linkedin?: boolean; // NOVO: Flag para saber se já conectou
 }
 
 interface AuthState {
@@ -12,8 +13,9 @@ interface AuthState {
   user: User | null;
   setAuth: (token: string, user: User) => void;
   logout: () => void;
-  deductCredits: (amount: number) => void; // NOVO: Desconta créditos localmente
-  updateCredits: (amount: number) => void; // NOVO: Atualiza o valor exato de créditos
+  deductCredits: (amount: number) => void; 
+  updateCredits: (amount: number) => void; 
+  updateUser: (data: Partial<User>) => void; // NOVO: Atualiza dados parciais do usuário
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -24,7 +26,6 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (token, user) => set({ token, user }),
       logout: () => set({ token: null, user: null }),
       
-      // NOVO: Funções para manipular os créditos na interface instantaneamente
       deductCredits: (amount) =>
         set((state) => ({
           user: state.user
@@ -36,9 +37,14 @@ export const useAuthStore = create<AuthState>()(
         set((state) => ({
           user: state.user ? { ...state.user, credits: amount } : null,
         })),
+
+      updateUser: (data) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...data } : null,
+        })),
     }),
     {
-      name: "auth-store", // Nome da chave que ficará salva no localStorage do navegador
+      name: "auth-store",
     }
   )
 );
