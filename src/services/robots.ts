@@ -34,6 +34,13 @@ export type AuthorityAgentRunGlobalIn = {
   nucleus: Record<string, any>;
 };
 
+// NOVO TIPO PARA SUGESTÃO DE TEMAS
+export type SuggestThemesIn = {
+  agent_key: string;
+  task: string;
+  nucleus: Record<string, any>;
+};
+
 export const api = {
   health: () => http<HealthResponse>("/api/health"),
 
@@ -96,6 +103,10 @@ export const api = {
       http<AuthorityAgentRunItem>(
         `/api/authority-agents/run/${encodeURIComponent(String(runId))}?client_id=${encodeURIComponent(clientId)}`
       ),
+      
+    // NOVA CHAMADA PARA SUGERIR TEMAS
+    suggestThemes: (payload: SuggestThemesIn) =>
+      http<{ themes: string[] }>(`/api/authority-agents/suggest-themes`, { method: "POST", json: payload }),
   },
 } as const;
 
@@ -127,7 +138,6 @@ export async function uploadBusinessCoreKnowledgeFile(publicId: string, file: Fi
   });
 }
 
-// NOVAS FUNÇÕES PARA DELETAR
 export async function deleteRobotKnowledgeFile(publicId: string, filename: string) {
   return http(`/api/robots/${publicId}/knowledge-files/${encodeURIComponent(filename)}`, {
     method: "DELETE",

@@ -1,5 +1,6 @@
 export type AuthorityTask = {
   title: string;
+  prompt?: string;
 };
 
 export const YOUTUBE_TASKS: AuthorityTask[] = [
@@ -96,7 +97,6 @@ export const EXTERNAL_MENTIONS_TASKS: AuthorityTask[] = [
   { title: "Plano de Padroniza\u00e7\u00e3o" },
 ];
 
-
 export const SITE_TASKS: AuthorityTask[] = [
   { title: "Blog Estratégico (Autoridade + AEO)" },
   { title: "FAQ Estratégico (AEO)" },
@@ -110,6 +110,30 @@ export const SITE_TASKS: AuthorityTask[] = [
   { title: "Estrutura de Home Estratégica" },
   { title: "Plano de Interlinkagem Interna" },
   { title: "Padronização SEO Técnica" },
+];
+
+// NOVAS TAREFAS DE DECISÃO AQUI
+export const DECISION_CONTENT_TASKS: AuthorityTask[] = [
+  { 
+    title: "FAQ",
+    prompt: "Gere um FAQ completo e persuasivo focado na quebra de objeções. IMPORTANTE: Leia o JSON do núcleo fornecido e busque a chave 'selected_theme'. O FAQ deve ser EXCLUSIVAMENTE sobre o tema definido em 'selected_theme'. Estruture perguntas e respostas diretas, sem invenção de dados."
+  },
+  { 
+    title: "BLOG otimizado para AEO, GEO e SEO",
+    prompt: "Escreva um artigo de Blog completo focado em conversão e autoridade (AEO, GEO e SEO). IMPORTANTE: Leia o JSON do núcleo e busque a chave 'selected_theme'. O artigo deve ser focado EXCLUSIVAMENTE nesse tema. Use H1, H2, H3, introdução cativante e chamada para ação no final."
+  },
+  { 
+    title: "Página de Destino (Landing Page)",
+    prompt: "Crie a estrutura e a copy completa para uma Landing Page de alta conversão. Use as informações do núcleo para definir a promessa principal, para quem é, benefícios, quebra de objeções e CTA."
+  },
+  { 
+    title: "E-mail de Quebra de Objeções",
+    prompt: "Escreva um e-mail persuasivo com o objetivo único de quebrar as principais objeções de um cliente que quase comprou mas parou no meio do caminho. Mantenha um tom profissional, acolhedor e focado na solução."
+  },
+  { 
+    title: "Comparativo: Nós vs Concorrentes",
+    prompt: "Crie um texto de decisão comparando implicitamente a solução da empresa (baseado no núcleo) com o mercado comum. Destaque os diferenciais reais sem citar nomes de concorrentes específicos, focando em gerar valor e confiança."
+  },
 ];
 
 export function tasksByAgentKey(agentKey?: string | null): AuthorityTask[] {
@@ -129,6 +153,8 @@ export function tasksByAgentKey(agentKey?: string | null): AuthorityTask[] {
       return EXTERNAL_MENTIONS_TASKS;
     case "site":
       return SITE_TASKS;
+    case "decision_content": // <-- NOVO AGENTE MAPEADO
+      return DECISION_CONTENT_TASKS;
     default:
       return [];
   }
