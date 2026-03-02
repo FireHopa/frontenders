@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, FileText, Loader2, CheckCircle2, Trash2 } from "lucide-react";
+import { Upload, FileText, Loader2, CheckCircle2, Trash2, File } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +51,7 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
       } else {
         await uploadBusinessCoreKnowledgeFile(publicId, file);
       }
-      toast.success(`Arquivo ${file.name} processado com sucesso!`);
+      toast.success(`Arquivo ${file.name} processado e aprendido com sucesso!`);
       if (onUploadSuccess) onUploadSuccess();
     } catch (error: any) {
       toast.error(error.message || "Erro ao processar arquivo.");
@@ -79,23 +79,22 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
   };
 
   return (
-    <Card className="border-border/60 bg-card shadow-lg flex flex-col h-fit">
-      <CardHeader className="pb-5 border-b border-border/40 bg-muted/20">
-        <CardTitle className="text-lg flex items-center gap-2 font-bold">
-          <div className="p-2 bg-google-blue/10 rounded-lg">
+    <Card className="border-border/60 bg-background/50 backdrop-blur-sm shadow-sm flex flex-col h-fit overflow-hidden transition-all duration-200 hover:shadow-md">
+      <CardHeader className="pb-5 border-b border-border/30 bg-muted/10">
+        <CardTitle className="text-lg font-bold flex items-center gap-3">
+          <div className="p-2 bg-google-blue/10 rounded-xl">
             <FileText className="w-5 h-5 text-google-blue" />
           </div>
           Base de Conhecimento
         </CardTitle>
-        <CardDescription className="text-sm mt-1">
-          Faça upload de PDFs, DOCX ou TXT para treinar a inteligência.
+        <CardDescription className="text-sm mt-2 leading-relaxed">
+          Faça upload de materiais para treinar a inteligência. O conteúdo será absorvido pelos agentes.
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="p-6 space-y-6">
-        
-        {/* Nova Área de Upload (Dropzone visual) */}
-        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+      <CardContent className="p-5 flex flex-col gap-6">
+        {/* Área de Upload Estilo Dropzone */}
+        <div>
           <input
             type="file"
             ref={fileInputRef}
@@ -103,61 +102,66 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
             className="hidden"
             accept=".pdf,.docx,.txt,.md,.csv"
           />
-          <div className={cn(
-            "w-full rounded-2xl border-2 border-dashed border-border/60 bg-muted/30 hover:bg-muted/60 transition-all flex flex-col items-center justify-center gap-3 p-8 text-center",
-            isUploading || deletingFile !== null ? "opacity-50 cursor-not-allowed pointer-events-none" : "hover:border-google-blue/50"
-          )}>
-            <div className="p-3 bg-background rounded-full shadow-sm">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || deletingFile !== null}
+            className={cn(
+              "w-full relative group flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border/60 bg-muted/20 p-8 text-center transition-all duration-200",
+              "hover:bg-google-blue/5 hover:border-google-blue/40 hover:shadow-sm cursor-pointer",
+              "disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-muted/20 disabled:hover:border-border/60"
+            )}
+          >
+            <div className="p-4 bg-background shadow-sm rounded-full group-hover:scale-105 transition-transform duration-200">
               {isUploading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-google-blue" />
+                <Loader2 className="w-6 h-6 text-google-blue animate-spin" />
               ) : (
-                <Upload className="h-6 w-6 text-muted-foreground group-hover:text-google-blue transition-colors" />
+                <Upload className="w-6 h-6 text-muted-foreground group-hover:text-google-blue transition-colors" />
               )}
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">
-                {isUploading ? "Processando arquivo..." : "Clique para anexar arquivo"}
+                {isUploading ? "Lendo documento..." : "Clique para anexar arquivo"}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Máx. 5MB (PDF, DOCX, TXT)</p>
+              <p className="text-xs text-muted-foreground mt-1.5 font-medium">
+                PDF, DOCX, TXT ou CSV (Max. 5MB)
+              </p>
             </div>
-          </div>
+          </button>
         </div>
 
-        {/* Lista de Arquivos fica fixada abaixo, não empurra o botão pro fundo */}
+        {/* Lista de Arquivos */}
         {uploadedFiles.length > 0 && (
-          <div className="space-y-3 pt-2 border-t border-border/40">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Arquivos Aprendidos
-              </h4>
-              <Badge variant="secondary" className="bg-muted text-xs rounded-full px-2">
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between pb-2 border-b border-border/40">
+              Arquivos Aprendidos
+              <Badge variant="secondary" className="bg-google-blue/10 text-google-blue hover:bg-google-blue/20">
                 {uploadedFiles.length}
               </Badge>
-            </div>
+            </h4>
             
-            <div className="grid gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
+            <div className="grid gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
               {uploadedFiles.map((f, i) => (
-                <div key={i} className="flex items-center gap-3 bg-background p-3 rounded-xl border border-border/50 group hover:border-google-blue/30 hover:shadow-sm transition-all min-w-0">
-                  <div className="p-1.5 bg-green-500/10 rounded-md shrink-0">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-500" />
+                <div key={i} className="flex items-center gap-3 text-sm bg-background/80 p-3.5 rounded-xl border border-border/50 group min-w-0 transition-all hover:border-google-blue/30 hover:shadow-sm">
+                  <div className="p-1.5 bg-[#00D278]/10 rounded-lg shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-[#00D278]" />
                   </div>
                   
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    <span className="font-semibold text-sm text-foreground truncate" title={f.filename}>
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <span className="font-semibold text-foreground truncate" title={f.filename}>
                       {f.filename}
                     </span>
-                    <span className="text-[10px] text-muted-foreground truncate">
-                      {new Date(f.uploaded_at).toLocaleString()}
+                    <span className="text-[11px] text-muted-foreground truncate font-medium">
+                      {new Date(f.uploaded_at).toLocaleDateString()} às {new Date(f.uploaded_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </span>
                   </div>
                   
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 shrink-0 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-600"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
                     disabled={deletingFile === f.filename}
-                    onClick={(e) => { e.stopPropagation(); handleDelete(f.filename); }}
-                    title="Excluir arquivo"
+                    onClick={() => handleDelete(f.filename)}
+                    title="Remover arquivo"
                   >
                     {deletingFile === f.filename ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   </Button>
@@ -166,7 +170,6 @@ export function KnowledgeUploader({ publicId, type, existingFilesJson, onUploadS
             </div>
           </div>
         )}
-
       </CardContent>
     </Card>
   );

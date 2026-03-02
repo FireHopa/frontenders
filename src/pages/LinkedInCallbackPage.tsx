@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { linkedinService } from "@/services/linkedin";
@@ -10,6 +10,9 @@ export default function LinkedInCallbackPage() {
   const navigate = useNavigate();
   const { updateUser } = useAuthStore();
   const [processing, setProcessing] = useState(true);
+  
+  // NOVO: Guarda o estado para impedir o React de mandar o código duas vezes
+  const hasCalledAPI = useRef(false);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -17,21 +20,24 @@ export default function LinkedInCallbackPage() {
 
     if (error) {
       toastApiError(new Error("Você cancelou a autorização do LinkedIn."), "Conexão Cancelada");
-      navigate("/authority-agents");
+      navigate("/authority-agents/run/linkedin");
       return;
     }
 
     if (code) {
+      // Se já chamou a API, aborta a segunda execução do React StrictMode
+      if (hasCalledAPI.current) return;
+      hasCalledAPI.current = true;
+
       linkedinService.connect(code)
         .then(() => {
           updateUser({ has_linkedin: true });
           toastSuccess("Conta do LinkedIn conectada com sucesso!");
-          // Volta para a página do Liam onde ele estava (ajuste se necessário)
-          navigate("/authority-agents/run/liam");
+          navigate("/authority-agents/run/linkedin"); // Volta para a Mônica
         })
         .catch((err) => {
-          toastApiError(err, "Erro ao conectar LinkedIn");
-          navigate("/authority-agents");
+          toastApiError(err, "Erro ao conectar LinkedIn. Verifique o terminal do Backend.");
+          navigate("/authority-agents/run/linkedin");
         });
     } else {
       setProcessing(false);
@@ -42,7 +48,7 @@ export default function LinkedInCallbackPage() {
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background">
       <Loader2 className="h-12 w-12 animate-spin text-[#0A66C2]" />
       <h2 className="mt-6 text-xl font-semibold text-foreground">Sincronizando LinkedIn...</h2>
-      <p className="mt-2 text-muted-foreground">Por favor, aguarde um momento.</p>
+      <p className="mt-2 text-muted-foreground">A conectar a sua conta de forma segura. Por favor, aguarde.</p>
     </div>
   );
 }

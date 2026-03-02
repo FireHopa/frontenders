@@ -186,8 +186,8 @@ export default function AuthorityAgentRunPage() {
                 <FileText className="h-4 w-4 mr-2" /> Baixar
               </Button>
               
-              {/* NOVO: Botão Publicar - Renderiza apenas para o Liam */}
-              {agentKey === "liam" && (
+              {/* CORRIGIDO: Agora usa a chave 'linkedin' para aparecer na Mônica */}
+              {agentKey === "linkedin" && (
                 <Button 
                   size="sm" 
                   className="bg-[#0A66C2] text-white shadow-sm rounded-xl hover:bg-[#004182]" 
