@@ -104,6 +104,10 @@ export const api = {
         `/api/authority-agents/run/${encodeURIComponent(String(runId))}?client_id=${encodeURIComponent(clientId)}`
       ),
       
+    // NOVA CHAMADA: Para atualizar/editar o texto
+    updateRunGlobal: (runId: number, payload: { output_text: string }) =>
+      http<AuthorityAgentRunItem>(`/api/authority-agents/run/${runId}`, { method: "PATCH", json: payload }),
+      
     // NOVA CHAMADA PARA SUGERIR TEMAS
     suggestThemes: (payload: SuggestThemesIn) =>
       http<{ themes: string[] }>(`/api/authority-agents/suggest-themes`, { method: "POST", json: payload }),

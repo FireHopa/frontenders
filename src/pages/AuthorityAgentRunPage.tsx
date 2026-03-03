@@ -1,16 +1,15 @@
 import React, { useState } from "react";
 import { useParams } from "react-router-dom";
-import { Play, Loader2, Copy, FileText, CheckCircle2, Coins, Linkedin } from "lucide-react";
+import { Play, Loader2, Copy, FileText, CheckCircle2, Coins, Linkedin, Pencil, Save, X } from "lucide-react";
 import { api, getClientId } from "@/services/robots";
 import { linkedinService } from "@/services/linkedin";
 import { AUTHORITY_AGENTS } from "@/constants/authorityAgents";
 import { tasksByAgentKey } from "@/constants/authorityTasks";
 import ResultViewer from "@/components/authority/ResultViewer";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { toastSuccess, toastApiError } from "@/lib/toast";
 import { useAuthStore } from "@/state/authStore";
-
-// NOVO: Importa o Modal
 import { PublishModal } from "@/components/linkedin/PublishModal";
 
 const STORAGE_KEY = "ori_authority_nucleus_v1";
@@ -20,9 +19,13 @@ export default function AuthorityAgentRunPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   
-  // NOVO: Estados para o Modal do LinkedIn
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+
+  // Estados para Edição
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedText, setEditedText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const { user, deductCredits } = useAuthStore();
   const agent = AUTHORITY_AGENTS.find((a) => a.key === agentKey);
@@ -37,6 +40,7 @@ export default function AuthorityAgentRunPage() {
 
     setLoading(true);
     setResult(null);
+    setIsEditing(false); // Resetar edição ao fazer nova busca
 
     try {
       const rawNucleus = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -74,7 +78,6 @@ export default function AuthorityAgentRunPage() {
     URL.revokeObjectURL(url);
   }
 
-  // NOVO: Função que lida com o clique no botão do LinkedIn
   async function handleLinkedInClick() {
     if (user?.has_linkedin) {
       setIsModalOpen(true);
@@ -89,7 +92,6 @@ export default function AuthorityAgentRunPage() {
     }
   }
 
-  // NOVO: Função que posta de verdade
   async function handlePublishPost(finalText: string) {
     setIsPublishing(true);
     try {
@@ -103,13 +105,33 @@ export default function AuthorityAgentRunPage() {
     }
   }
 
+  // Funções de Edição
+  function handleEdit() {
+    setEditedText(result?.output_text || "");
+    setIsEditing(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!result?.id) return;
+    setIsSaving(true);
+    try {
+      const updated = await api.authorityAgents.updateRunGlobal(result.id, { output_text: editedText });
+      setResult(updated);
+      setIsEditing(false);
+      toastSuccess("Texto atualizado e salvo com sucesso!");
+    } catch (err) {
+      toastApiError(err, "Erro ao salvar edição");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   if (!agent) return <div className="p-8">Agente não encontrado.</div>;
   const hasEnoughCredits = user && user.credits >= 5;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 space-y-8 relative">
       
-      {/* Modal de Publicação */}
       <PublishModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -179,6 +201,11 @@ export default function AuthorityAgentRunPage() {
               <CheckCircle2 className="h-5 w-5" /> Resultado gerado com sucesso
             </div>
             <div className="flex flex-wrap gap-2">
+              {!isEditing && (
+                <Button size="sm" variant="outline" className="bg-card shadow-sm rounded-xl hover:text-google-blue" onClick={handleEdit}>
+                  <Pencil className="h-4 w-4 mr-2" /> Editar
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="bg-card shadow-sm rounded-xl" onClick={() => { navigator.clipboard.writeText(result.output_text); toastSuccess("Copiado!"); }}>
                 <Copy className="h-4 w-4 mr-2" /> Copiar 
               </Button>
@@ -186,7 +213,6 @@ export default function AuthorityAgentRunPage() {
                 <FileText className="h-4 w-4 mr-2" /> Baixar
               </Button>
               
-              {/* CORRIGIDO: Agora usa a chave 'linkedin' para aparecer na Mônica */}
               {agentKey === "linkedin" && (
                 <Button 
                   size="sm" 
@@ -199,7 +225,25 @@ export default function AuthorityAgentRunPage() {
             </div>
           </div>
           
-          <ResultViewer title={agent.name} text={result.output_text} />
+          {isEditing ? (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <Textarea 
+                value={editedText} 
+                onChange={(e) => setEditedText(e.target.value)} 
+                className="min-h-[400px] font-mono text-sm leading-relaxed p-6 rounded-2xl border border-border bg-card shadow-sm focus-visible:ring-google-blue resize-y"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                  <X className="h-4 w-4 mr-2" /> Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} Salvar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <ResultViewer title={agent.name} text={result.output_text} />
+          )}
 
           <div className="mt-8 flex justify-center">
              <Button variant="secondary" className="rounded-xl px-8" onClick={() => setResult(null)}>
