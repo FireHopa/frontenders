@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Timer, Sparkles, ExternalLink, History, Loader2, X, Copy } from "lucide-react";
+import { Timer, Sparkles, ExternalLink, History, Loader2, X, Copy, Linkedin } from "lucide-react";
 import { AUTHORITY_AGENTS } from "@/constants/authorityAgents";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api, getClientId, type AuthorityAgentRunItem } from "@/services/robots";
 import { motion, AnimatePresence } from "framer-motion";
 import { Markdown } from "@/components/markdown/Markdown";
-import { toastSuccess } from "@/lib/toast";
+import { toastSuccess, toastApiError } from "@/lib/toast";
+
+// NOVO: Importações para o LinkedIn
+import { PublishModal } from "@/components/linkedin/PublishModal";
+import { linkedinService } from "@/services/linkedin";
+import { useAuthStore } from "@/state/authStore";
 
 function formatRemaining(sec: number) {
   if (sec <= 0) return "Pronto";
@@ -41,6 +46,11 @@ export default function AuthorityAgentsPage() {
   const [cooldowns, setCooldowns] = React.useState<Record<string, number>>(loadCooldowns);
   const [selectedHistory, setSelectedHistory] = React.useState<AuthorityAgentRunItem | null>(null);
 
+  // NOVO: Estados e variáveis do LinkedIn
+  const { user } = useAuthStore();
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isPublishing, setIsPublishing] = React.useState(false);
+
   const clientId = React.useMemo(() => getClientId(), []);
 
   // Busca o histórico global de execuções no backend
@@ -63,9 +73,48 @@ export default function AuthorityAgentsPage() {
     return () => clearInterval(t);
   }, []);
 
+  // NOVO: Função para o botão do LinkedIn no Histórico
+  async function handleLinkedInClick() {
+    if (user?.has_linkedin) {
+      setIsModalOpen(true);
+    } else {
+      try {
+        localStorage.setItem("linkedin_redirect", "/authority-agents");
+        toastSuccess("Redirecionando para o LinkedIn...");
+        const data = await linkedinService.getAuthUrl();
+        window.location.href = data.url;
+      } catch (err) {
+        toastApiError(err, "Erro ao iniciar conexão com LinkedIn");
+      }
+    }
+  }
+
+  // NOVO: Função para publicar de fato
+  async function handlePublishPost(finalText: string) {
+    setIsPublishing(true);
+    try {
+      await linkedinService.publish(finalText);
+      toastSuccess("Post publicado no seu LinkedIn com sucesso! 🎉");
+      setIsModalOpen(false);
+    } catch (err) {
+      toastApiError(err, "Erro ao publicar no LinkedIn");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
   return (
     <div className="relative min-h-[calc(100dvh-1px)] pb-32">
       <Particles className="pointer-events-none absolute inset-0 opacity-40" />
+
+      {/* NOVO: Renderiza o Modal de Publicação */}
+      <PublishModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialText={selectedHistory?.output_text || ""}
+        onPublish={handlePublishPost}
+        loading={isPublishing}
+      />
 
       <div className="relative max-w-7xl mx-auto px-4 mt-8 space-y-16">
         
@@ -98,7 +147,6 @@ export default function AuthorityAgentsPage() {
                     <div className="space-y-2">
                       <h3 className="font-semibold text-lg text-foreground flex items-center justify-between">
                         {agent.name}
-                        {remaining > 0 && <span className="text-[10px] font-medium text-google-yellow bg-google-yellow/10 px-2 py-0.5 rounded-full flex items-center gap-1"><Timer className="h-3 w-3" /> {formatRemaining(remaining)}</span>}
                       </h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">{agent.desc}</p>
                     </div>
@@ -190,7 +238,7 @@ export default function AuthorityAgentsPage() {
                transition={{ duration: 0.3, ease: "easeOut" }} 
                className="w-full max-w-4xl h-[90vh] bg-card border border-border/60 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden"
              >
-                <div className="px-6 py-5 border-b flex items-center justify-between bg-background shadow-sm z-10">
+                <div className="px-6 py-5 border-b flex flex-wrap items-center justify-between gap-4 bg-background shadow-sm z-10">
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-2xl bg-[rgba(0,200,232,0.08)] text-google-blue flex items-center justify-center border border-google-blue/20 shrink-0">
                       <History className="h-6 w-6" />
@@ -204,7 +252,18 @@ export default function AuthorityAgentsPage() {
                       </p>
                     </div>
                   </div>
+                  
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    {/* NOVO: Botão do LinkedIn condicional (apenas se for a Mônica/linkedin) */}
+                    {selectedHistory.agent_key === "linkedin" && (
+                      <Button 
+                        className="bg-[#0A66C2] text-white shadow-sm rounded-xl hover:bg-[#004182]" 
+                        onClick={handleLinkedInClick}
+                      >
+                        <Linkedin className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Publicar no LinkedIn</span>
+                      </Button>
+                    )}
+
                     <Button 
                       variant="outline" 
                       className="rounded-xl shadow-sm hidden sm:flex" 
@@ -215,14 +274,14 @@ export default function AuthorityAgentsPage() {
                     >
                       <Copy className="h-4 w-4 mr-2" /> Copiar Tudo
                     </Button>
-                    <Button variant="ghost" size="icon" className="rounded-full bg-muted/50 hover:bg-muted" onClick={() => setSelectedHistory(null)}>
+                    
+                    <Button variant="ghost" size="icon" className="rounded-full bg-muted/50 hover:bg-muted ml-2" onClick={() => setSelectedHistory(null)}>
                       <X className="h-6 w-6" />
                     </Button>
                   </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 bg-background/40 custom-scrollbar">
-                  {/* Botão de copiar versão Mobile */}
                   <div className="mb-6 flex justify-end sm:hidden">
                      <Button 
                         variant="outline" 
