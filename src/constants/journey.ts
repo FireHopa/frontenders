@@ -9,11 +9,12 @@ export const LEVELS = [
 export const JOURNEY_STEPS: JourneyStep[] = [
   // FASE 1: Montagem do Robô (Level 1)
   { id: "company_name", label: "Empresa", helper: "Como sua marca é chamada?", placeholder: "Ex: Casa do Ads", level: 1, accent: "blue" },
+  { id: "owner_name", label: "Dono(a)", helper: "Quem é o dono ou porta-voz da empresa?", placeholder: "Ex: João Silva", level: 1, accent: "blue" },
   { id: "niche", label: "Nicho", helper: "Em qual mercado você atua?", placeholder: "Ex: Tráfego Pago para PMEs", level: 1, accent: "blue" },
   { id: "audience", label: "Público-alvo", helper: "Quem é o seu cliente ideal?", placeholder: "Ex: Donos de negócios locais", level: 1, accent: "blue" },
   { id: "offer", label: "Oferta", helper: "O que você vende?", placeholder: "Ex: Imersão presencial e consultoria", level: 1, accent: "blue" },
   { id: "region", label: "Região", helper: "Onde você atua?", placeholder: "Ex: Santos, SP", level: 1, accent: "blue" },
-  { id: "tone", label: "Tom de voz", helper: "Como o robô deve falar?", placeholder: "Ex: Profissional", level: 1, accent: "yellow" },
+  { id: "tone", label: "Tom de voz", helper: "Como o robô deve falar?", placeholder: "Ex: Amigável e Técnico", level: 1, accent: "yellow" },
   { id: "goals", label: "Objetivos", helper: "O que você espera alcançar?", placeholder: "Ex: Mais leads qualificados", level: 1, accent: "green" },
 
   // FASE 2: Provas Sociais e Regras (Level 2)
@@ -34,7 +35,7 @@ export const JOURNEY_STEPS: JourneyStep[] = [
 ];
 
 export const DEFAULT_VALUES: Record<string, string> = {
-  company_name: "", niche: "", audience: "", offer: "", region: "", tone: "", competitors: "", goals: "",
+  company_name: "", owner_name: "", niche: "", audience: "", offer: "", region: "", tone: "", competitors: "", goals: "",
   real_differentials: "", restrictions: "", reviews: "", testimonials: "", usable_links_texts: "", forbidden_content: "",
   site: "", google_business_profile: "", instagram: "", linkedin: "", youtube: "", tiktok: ""
 };

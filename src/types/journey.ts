@@ -1,5 +1,6 @@
 export type BriefingField =
   | "company_name"
+  | "owner_name"
   | "niche"
   | "audience"
   | "offer"

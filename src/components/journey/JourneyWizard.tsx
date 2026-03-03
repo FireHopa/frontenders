@@ -20,12 +20,16 @@ import { useCreateRobot } from "@/hooks/useRobots";
 import { toastApiError, toastSuccess } from "@/lib/toast";
 import { CheckCircle2, Trophy, Timer, Star, Eye, EyeOff, Bot, Sparkles as SparkleIcon } from "lucide-react";
 
-const TONE_OPTIONS: Array<{ id: string; label: string; value: string }> = [
-  { id: "professional_clear", label: "Profissional, direto e claro", value: "Profissional, direto, claro" },
-  { id: "didactic_firm", label: "Didático e firme", value: "Didático, firme, sem rodeios" },
-  { id: "authoritative_confident", label: "Autoritário e confiante", value: "Autoridade alta, confiante, sem hesitação" },
-  { id: "friendly_expert", label: "Amigável, mas especialista", value: "Amigável, especialista, seguro" },
-  { id: "other", label: "Outro (escrever manualmente)", value: "__OTHER__" },
+const TONE_OPTIONS = [
+  { id: "simples", label: "Simples" },
+  { id: "direta", label: "Direta" },
+  { id: "amigavel", label: "Amigável" },
+  { id: "tecnica", label: "Técnica" },
+  { id: "didatica", label: "Didática" },
+  { id: "acolhedora", label: "Acolhedora" },
+  { id: "seria", label: "Séria" },
+  { id: "divertida", label: "Divertida" },
+  { id: "inspiradora", label: "Inspiradora" },
 ];
 
 function achievementsFrom(state: ReturnType<typeof initialJourneyState>): Achievement[] {
@@ -69,11 +73,12 @@ function achievementsFrom(state: ReturnType<typeof initialJourneyState>): Achiev
 function coachHint(stepId: string) {
   switch (stepId) {
     case "company_name": return `Nome da empresa. Se já tem marca, use exatamente como nas redes.`;
+    case "owner_name": return `O nome de quem está à frente do negócio. A IA usará isso para criar uma conexão mais pessoal nas respostas!`;
     case "niche": return `Defina o recorte: "o quê" + "para quem" + "contexto".`;
     case "audience": return `Descreva pelo contexto e dor. Ex: "mulheres 25-45 buscando estética natural".`;
     case "offer": return `Sua promessa principal. Ex: "clareza em 7 dias" ou "consultoria em tráfego".`;
     case "region": return `Região ajusta vocabulário. Pode ser Brasil, ou a cidade para foco local.`;
-    case "tone": return `Escolha um tom que você sustentaria todos os dias.`;
+    case "tone": return `Escolha como a IA vai soar. Você pode selecionar mais de uma opção para criar um tom único!`;
     case "goals": return `Objetivo mensurável. Ex: mais agendamentos ou leads.`;
     case "real_differentials": return `Fase 2: Esqueça promessas vazias. Fale de método próprio, anos de mercado ou garantias.`;
     case "restrictions": return `Fase 2: Defenda a marca. O que o robô não pode fazer em hipótese alguma?`;
@@ -106,23 +111,69 @@ export function JourneyWizard() {
   const [confetti, setConfetti] = React.useState(false);
   const [egg, setEgg] = React.useState(false);
 
-  const [toneChoice, setToneChoice] = React.useState<string | null>(null);
+  // Estados locais para múltipla seleção de Tone
+  const [selectedTones, setSelectedTones] = React.useState<string[]>([]);
+  const [showCustomTone, setShowCustomTone] = React.useState(false);
   const [customTone, setCustomTone] = React.useState("");
 
   React.useEffect(() => {
     if (step.id !== "tone") return;
-    const v = (value ?? "").toString();
-    const preset = TONE_OPTIONS.find((o) => o.value !== "__OTHER__" && o.value === v);
-    if (preset) { setToneChoice(preset.value); setCustomTone(""); return; }
-    if (v.trim().length > 0) { setToneChoice("__OTHER__"); setCustomTone(v); return; }
-    setToneChoice(null); setCustomTone("");
-  }, [step.id, value]);
+    const v = (state.values.tone ?? "").toString();
+    if (!v) {
+      setSelectedTones([]);
+      setCustomTone("");
+      setShowCustomTone(false);
+      return;
+    }
+    const parts = v.split(", ").filter(Boolean);
+    const knownTones = TONE_OPTIONS.map((o) => o.label);
+    const matched = parts.filter((p) => knownTones.includes(p));
+    const others = parts.filter((p) => !knownTones.includes(p));
+
+    setSelectedTones(matched);
+    if (others.length > 0) {
+      setShowCustomTone(true);
+      setCustomTone(others.join(", "));
+    } else {
+      setShowCustomTone(false);
+      setCustomTone("");
+    }
+  }, [state.stepIndex, step.id, state.values.tone]);
 
   const error = validateField(step.id as any, value);
   const isLast = state.stepIndex === JOURNEY_STEPS.length - 1;
   const canAdvance = !error;
 
   const setValue = (v: string) => dispatch({ type: "SET_VALUE", field: step.id as any, value: v });
+
+  const updateToneValue = (tones: string[], showC: boolean, cTone: string) => {
+    const all = [...tones];
+    if (showC && cTone.trim()) all.push(cTone.trim());
+    setValue(all.join(", "));
+  };
+
+  const handleToneChange = (toneLabel: string) => {
+    let newTones = [...selectedTones];
+    if (newTones.includes(toneLabel)) {
+      newTones = newTones.filter((t) => t !== toneLabel);
+    } else {
+      newTones.push(toneLabel);
+    }
+    setSelectedTones(newTones);
+    updateToneValue(newTones, showCustomTone, customTone);
+  };
+
+  const handleCustomToggle = () => {
+    const nextShow = !showCustomTone;
+    setShowCustomTone(nextShow);
+    if (!nextShow) setCustomTone("");
+    updateToneValue(selectedTones, nextShow, nextShow ? customTone : "");
+  };
+
+  const handleCustomChange = (v: string) => {
+    setCustomTone(v);
+    updateToneValue(selectedTones, showCustomTone, v);
+  };
 
   const onNext = async () => {
     dispatch({ type: "TOUCH", field: step.id as any });
@@ -133,9 +184,10 @@ export function JourneyWizard() {
     }
     if (!isLast) { dispatch({ type: "NEXT" }); return; }
 
-    // 1. Payload do Briefing (Gera o sistema do Robô)
+    // 1. Payload do Briefing com TODAS as informações para criar as system_instructions da IA
     const briefingPayload: BriefingIn = {
       company_name: state.values.company_name?.trim() || "",
+      owner_name: state.values.owner_name?.trim() || "",
       niche: state.values.niche?.trim() || "",
       audience: state.values.audience?.trim() || "",
       offer: state.values.offer?.trim() || "",
@@ -143,11 +195,26 @@ export function JourneyWizard() {
       tone: state.values.tone?.trim() || "Profissional, direto, claro",
       competitors: state.values.competitors?.trim() || "",
       goals: state.values.goals?.trim() || "Aumentar autoridade e ser citado por IA",
+      
+      // Enviando fases 2 e 3 para a IA ficar blindada com links e regras:
+      real_differentials: state.values.real_differentials?.trim() || "",
+      restrictions: state.values.restrictions?.trim() || "",
+      forbidden_content: state.values.forbidden_content?.trim() || "",
+      reviews: state.values.reviews?.trim() || "",
+      testimonials: state.values.testimonials?.trim() || "",
+      usable_links_texts: state.values.usable_links_texts?.trim() || "",
+      site: state.values.site?.trim() || "",
+      google_business_profile: state.values.google_business_profile?.trim() || "",
+      instagram: state.values.instagram?.trim() || "",
+      linkedin: state.values.linkedin?.trim() || "",
+      youtube: state.values.youtube?.trim() || "",
+      tiktok: state.values.tiktok?.trim() || "",
     };
 
     // 2. ALIMENTAÇÃO DO NÚCLEO GLOBAL NO LOCALSTORAGE
     const corePayload = {
       company_name: state.values.company_name?.trim() || "",
+      owner_name: state.values.owner_name?.trim() || "",
       city_state: state.values.region?.trim() || "",
       main_audience: state.values.audience?.trim() || "",
       services_products: state.values.offer?.trim() || "",
@@ -194,7 +261,6 @@ export function JourneyWizard() {
     }
   }, [step.id, completed, step.optional, step.helper, step.label]);
 
-  // Função para mapear ícones das conquistas
   const getAchievementIcon = (id: string) => {
     switch (id) {
       case "perfect": return <Trophy className="h-4 w-4 text-google-blue" />;
@@ -215,42 +281,71 @@ export function JourneyWizard() {
 
           <Card variant="glass" className="relative overflow-hidden">
             <Sparkles active={showSpark} />
+            
+            {/* LÓGICA INVERTIDA AQUI: Pergunta em destaque e aviso pequeno */}
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={step.accent as any}>{step.label}</Badge>
                 {step.optional ? <Badge variant="outline">opcional</Badge> : null}
               </div>
-              <CardTitle className="mt-2 text-xl">Responda e avance.</CardTitle>
-              <CardDescription>{step.helper}</CardDescription>
+              <CardTitle className="mt-2 text-xl font-bold text-foreground">
+                {step.helper}
+              </CardTitle>
+              <CardDescription className="text-sm">
+                Responda e avance.
+              </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4">
               <AnimatePresence mode="wait">
                 <motion.div key={step.id} initial="hidden" animate="show" exit="hidden" variants={fadeUp} transition={transitions.base} className="space-y-2">
+                  
                   {step.id === "tone" ? (
                     <div className="space-y-3">
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {TONE_OPTIONS.map((opt) => {
-                          const selected = toneChoice === opt.value;
+                          const isSelected = selectedTones.includes(opt.label);
                           return (
                             <button
                               key={opt.id}
                               type="button"
-                              onClick={() => { setToneChoice(opt.value); if (opt.value !== "__OTHER__") { setCustomTone(""); setValue(opt.value); } else { setValue(customTone); } }}
-                              className={["w-full rounded-xl border px-4 py-3 text-left transition", selected ? "border-google-blue/70 bg-[rgba(0,200,232,0.08)]" : "border-border/60 hover:bg-background/40"].join(" ")}
+                              onClick={() => handleToneChange(opt.label)}
+                              className={["rounded-xl border px-3 py-2.5 text-center transition text-sm flex items-center justify-center", isSelected ? "border-google-blue bg-[rgba(0,200,232,0.1)] text-google-blue font-semibold shadow-sm" : "border-border/60 hover:bg-background/40 hover:border-border font-medium text-foreground/80"].join(" ")}
                             >
-                              <div className="font-medium">{opt.label}</div>
+                              {opt.label}
                             </button>
                           );
                         })}
+                        <button
+                          type="button"
+                          onClick={handleCustomToggle}
+                          className={["rounded-xl border px-3 py-2.5 text-center transition text-sm flex items-center justify-center", showCustomTone ? "border-google-blue bg-[rgba(0,200,232,0.1)] text-google-blue font-semibold shadow-sm" : "border-border/60 hover:bg-background/40 hover:border-border font-medium text-foreground/80"].join(" ")}
+                        >
+                          Outra(s)...
+                        </button>
                       </div>
-                      {toneChoice === "__OTHER__" ? <Input autoFocus value={customTone} onChange={(e) => { const v = e.target.value; setCustomTone(v); setValue(v); }} onKeyDown={onKeyDown} placeholder={step.placeholder} aria-invalid={Boolean(error)} /> : null}
+
+                      <AnimatePresence>
+                        {showCustomTone && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                            <Input
+                              autoFocus
+                              className="mt-2"
+                              value={customTone}
+                              onChange={(e) => handleCustomChange(e.target.value)}
+                              onKeyDown={onKeyDown}
+                              placeholder="Digite outros tons (separados por vírgula)"
+                              aria-invalid={Boolean(error)}
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   ) : (
                     <Input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={onKeyDown} placeholder={step.placeholder} aria-invalid={Boolean(error)} />
                   )}
 
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 pt-2">
                     <div className="text-xs">
                       {error && state.touched[step.id] ? <span className="text-google-red">{error}</span> : <span className="text-muted-foreground">{step.optional ? "Pode deixar em branco e avançar." : "Obrigatório."}</span>}
                     </div>
@@ -259,7 +354,7 @@ export function JourneyWizard() {
                 </motion.div>
               </AnimatePresence>
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-2">
                 <Button variant="ghost" onClick={onBack} disabled={state.stepIndex === 0}>Voltar</Button>
                 <div className="flex gap-2 sm:justify-end">
                   <Button variant="glass" onClick={() => { setValue(""); dispatch({ type: "TOUCH", field: step.id as any }); void onNext(); }}>Pular</Button>
@@ -283,7 +378,6 @@ export function JourneyWizard() {
         </div>
       </div>
 
-      {/* A MÁGICA DA UI ACONTECE AQUI: COMPLETION CINEMATIC */}
       <AnimatePresence>
         {completed ? (
           <motion.div
@@ -303,25 +397,18 @@ export function JourneyWizard() {
             >
               <Card className="overflow-hidden rounded-[2.5rem] border-border/50 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] bg-card/90 backdrop-blur-3xl relative">
                 
-                {/* Glow de fundo */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-32 bg-[rgba(0,200,232,0.12)] blur-[60px] pointer-events-none rounded-full" />
-                
-                {/* Faixa Colorida no Topo */}
                 <div className="h-2 w-full bg-gradient-to-r from-google-blue via-google-green to-google-yellow" />
 
                 <CardContent className="p-8 sm:p-12 text-center space-y-8 relative z-10">
                   
-                  {/* Ícone de Sucesso */}
                   <motion.div 
-                    initial={{ scale: 0 }} 
-                    animate={{ scale: 1 }} 
-                    transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.3 }}
+                    initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.3 }}
                     className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-google-green/10 border border-google-green/20 text-google-green shadow-[0_0_40px_-10px_rgba(0,210,120,0.40)]"
                   >
                     <CheckCircle2 className="h-12 w-12" />
                   </motion.div>
 
-                  {/* Textos */}
                   <div className="space-y-3">
                     <motion.h2 
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
@@ -337,7 +424,6 @@ export function JourneyWizard() {
                     </motion.p>
                   </div>
 
-                  {/* Grid de Conquistas (Badges Premium) */}
                   {completed.achievements.length > 0 && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
@@ -353,7 +439,6 @@ export function JourneyWizard() {
                     </motion.div>
                   )}
 
-                  {/* Easter Egg */}
                   {completed.achievements.some((a) => a.id === "perfect") && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="max-w-md mx-auto">
                       <button 
@@ -366,9 +451,7 @@ export function JourneyWizard() {
                       <AnimatePresence>
                         {egg && (
                           <motion.div 
-                            initial={{ height: 0, opacity: 0 }} 
-                            animate={{ height: "auto", opacity: 1 }} 
-                            exit={{ height: 0, opacity: 0 }}
+                            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden"
                           >
                             <div className="mt-2 p-4 rounded-2xl bg-google-blue/5 border border-google-blue/20 text-xs text-google-blue font-medium leading-relaxed">
@@ -380,7 +463,6 @@ export function JourneyWizard() {
                     </motion.div>
                   )}
 
-                  {/* Botões de Ação */}
                   <motion.div 
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}
                     className="flex flex-col sm:flex-row justify-center gap-4 pt-4 border-t border-border/40"

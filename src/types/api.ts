@@ -25,6 +25,7 @@ export interface RobotDetail {
 
 export interface BriefingIn {
   company_name: string;
+  owner_name?: string;
   niche: string;
   audience: string;
   offer: string;
@@ -32,6 +33,20 @@ export interface BriefingIn {
   tone?: string;
   competitors?: string;
   goals: string;
+  
+  // INFORMAÇÕES DAS FASES 2 E 3 PARA O ROBÔ
+  real_differentials?: string;
+  restrictions?: string;
+  forbidden_content?: string;
+  reviews?: string;
+  testimonials?: string;
+  usable_links_texts?: string;
+  site?: string;
+  instagram?: string;
+  google_business_profile?: string;
+  linkedin?: string;
+  youtube?: string;
+  tiktok?: string;
 }
 
 export interface RobotUpdateIn {
@@ -62,7 +77,6 @@ export interface MessageUpdateIn {
   content: string;
 }
 
-
 export interface AuthorityAssistantIn {
   message: string;
   history?: { role: "user" | "assistant"; content: string }[];
@@ -88,7 +102,6 @@ export interface AuthorityEditOut {
   before_score: number;
   after_score: number;
 }
-
 
 export interface BusinessCoreOut {
   company_name: string;
@@ -118,6 +131,7 @@ export interface BusinessCoreOut {
 
 export interface BusinessCoreIn {
   company_name?: string | null;
+  owner_name?: string | null;
   city_state?: string | null;
   service_area?: string | null;
   main_audience?: string | null;
@@ -152,7 +166,6 @@ export interface AuthorityAgentRunGlobalRequest {
   nucleus: BusinessCoreIn;
 }
 
-// ATUALIZADO: Reflete exatamente o que o FastAPI devolve (AuthorityAgentRunOut)
 export interface AuthorityAgentRunResponse {
   id: number;
   agent_key: string;
