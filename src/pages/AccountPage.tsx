@@ -1,11 +1,25 @@
-import React from "react";
-import { User, Mail, Coins, ShieldCheck } from "lucide-react";
+import React, { useState } from "react";
+import { User, Mail, Coins, ShieldCheck, Linkedin, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/state/authStore";
+import { linkedinService } from "@/services/linkedin";
 
 export default function AccountPage() {
   const { user } = useAuthStore();
+  const [isLinking, setIsLinking] = useState(false);
 
   if (!user) return <div className="p-8">Não autenticado.</div>;
+
+  const handleConnectLinkedIn = async () => {
+    try {
+      setIsLinking(true);
+      localStorage.setItem("linkedin_redirect", "/conta"); // Marca a origem
+      const res = await linkedinService.getAuthUrl();
+      window.location.href = res.url;
+    } catch (error) {
+      console.error("Erro ao gerar a URL do LinkedIn", error);
+      setIsLinking(false);
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 space-y-8 animate-in fade-in duration-500">
@@ -31,8 +45,26 @@ export default function AccountPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2 mt-4 px-4 py-2 bg-green-500/10 text-green-500 rounded-full text-sm font-medium border border-green-500/20">
-            <ShieldCheck className="h-4 w-4" /> Conta Ativa
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+            <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-500 rounded-full text-sm font-medium border border-green-500/20">
+              <ShieldCheck className="h-4 w-4" /> Conta Ativa
+            </div>
+
+            {/* NOVO: Botão de Vincular LinkedIn */}
+            {user.has_linkedin ? (
+              <div className="flex items-center gap-2 px-4 py-2 bg-[#0A66C2]/10 text-[#0A66C2] rounded-full text-sm font-medium border border-[#0A66C2]/20">
+                <Linkedin className="h-4 w-4" /> LinkedIn Conectado
+              </div>
+            ) : (
+              <button 
+                onClick={handleConnectLinkedIn} 
+                disabled={isLinking}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full text-sm font-medium border border-zinc-700 transition-colors disabled:opacity-50"
+              >
+                {isLinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Linkedin className="h-4 w-4" />}
+                Vincular LinkedIn
+              </button>
+            )}
           </div>
         </div>
 

@@ -11,21 +11,23 @@ export default function LinkedInCallbackPage() {
   const { updateUser } = useAuthStore();
   const [processing, setProcessing] = useState(true);
   
-  // NOVO: Guarda o estado para impedir o React de mandar o código duas vezes
   const hasCalledAPI = useRef(false);
 
   useEffect(() => {
     const code = searchParams.get("code");
     const error = searchParams.get("error");
+    
+    // Descobre para onde voltar. O padrão é a Mônica, se não achar a flag no localStorage
+    const redirectPath = localStorage.getItem("linkedin_redirect") || "/authority-agents/run/linkedin";
 
     if (error) {
       toastApiError(new Error("Você cancelou a autorização do LinkedIn."), "Conexão Cancelada");
-      navigate("/authority-agents/run/linkedin");
+      localStorage.removeItem("linkedin_redirect");
+      navigate(redirectPath);
       return;
     }
 
     if (code) {
-      // Se já chamou a API, aborta a segunda execução do React StrictMode
       if (hasCalledAPI.current) return;
       hasCalledAPI.current = true;
 
@@ -33,11 +35,13 @@ export default function LinkedInCallbackPage() {
         .then(() => {
           updateUser({ has_linkedin: true });
           toastSuccess("Conta do LinkedIn conectada com sucesso!");
-          navigate("/authority-agents/run/linkedin"); // Volta para a Mônica
+          localStorage.removeItem("linkedin_redirect");
+          navigate(redirectPath);
         })
         .catch((err) => {
           toastApiError(err, "Erro ao conectar LinkedIn. Verifique o terminal do Backend.");
-          navigate("/authority-agents/run/linkedin");
+          localStorage.removeItem("linkedin_redirect");
+          navigate(redirectPath);
         });
     } else {
       setProcessing(false);
