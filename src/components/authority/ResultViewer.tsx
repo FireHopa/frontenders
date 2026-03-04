@@ -1,35 +1,75 @@
 import React, { useMemo } from "react";
+import { Lightbulb, AlertTriangle, CheckCircle, Star, MessageCircle, Quote } from "lucide-react";
 
 type Props = {
   title?: string;
   text: string;
 };
 
-/**
- * Render "model output" in a readable way WITHOUT adding new dependencies.
- * - Supports headings (#, ##, ###)
- * - Bullet lists (-, •)
- * - Simple inline formatting: **bold**, `code`
- * - Escapes HTML to avoid injection
- */
 export default function ResultViewer({ title = "Resultado", text }: Props) {
-  const blocks = useMemo(() => parseBlocks(text || ""), [text]);
+  // Tenta converter o texto para JSON (Nova Arquitetura de Blocos)
+  const parsedJson = useMemo(() => {
+    try {
+      const data = JSON.parse(text || "{}");
+      if (data && Array.isArray(data.blocos)) {
+        return data;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }, [text]);
 
+  // Se não for JSON (resultados antigos), usa o parseador de Markdown legado
+  const legacyBlocks = useMemo(() => {
+    if (parsedJson) return [];
+    return parseBlocks(text || "");
+  }, [text, parsedJson]);
+
+  // RENDERIZAÇÃO DA ARQUITETURA EM BLOCOS (ULTRA GLOW-UP)
+  if (parsedJson) {
+    return (
+      <section className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="rounded-[2.5rem] border border-border bg-card/80 backdrop-blur-xl shadow-sm overflow-hidden">
+          
+          {/* Cabeçalho Premium */}
+          <div className="relative bg-gradient-to-b from-muted/50 to-transparent border-b border-border/50 p-8 sm:p-12">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-google-blue/40 to-transparent"></div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground leading-tight max-w-4xl">
+              {parsedJson.titulo_da_tela || title}
+            </h2>
+          </div>
+
+          {/* Renderização dos Blocos Mágicos */}
+          <div className="p-8 sm:p-12 space-y-12">
+            {parsedJson.blocos.map((bloco: any, idx: number) => (
+              <React.Fragment key={idx}>
+                {renderJsonBlock(bloco, idx)}
+              </React.Fragment>
+            ))}
+          </div>
+          
+        </div>
+      </section>
+    );
+  }
+
+  // RENDERIZAÇÃO LEGADA (MARKDOWN ANTIGO)
   return (
     <section className="w-full">
-      {title ? (
+      {title && (
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
         </div>
-      ) : null}
+      )}
 
-      <div className="rounded-2xl border border-border bg-card shadow-sm">
-        <div className="p-4 sm:p-6">
-          {blocks.length === 0 ? (
-            <div className="text-sm text-tertiary">Sem conteúdo.</div>
+      <div className="rounded-3xl border border-border bg-card shadow-sm">
+        <div className="p-6 sm:p-8">
+          {legacyBlocks.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Sem conteúdo.</div>
           ) : (
-            <div className="prose prose-invert max-w-none">
-              {blocks.map((b, idx) => renderBlock(b, idx))}
+            <div className="prose prose-zinc dark:prose-invert max-w-none text-foreground/80 leading-relaxed">
+              {legacyBlocks.map((b, idx) => renderLegacyBlock(b, idx))}
             </div>
           )}
         </div>
@@ -37,6 +77,140 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
     </section>
   );
 }
+
+// ============================================================================
+// FUNÇÕES DE RENDERIZAÇÃO DOS BLOCOS JSON (A MÁGICA VISUAL PREMIUM)
+// ============================================================================
+
+function renderJsonBlock(bloco: any, key: number) {
+  const { tipo, conteudo } = bloco;
+
+  switch (tipo) {
+    case "highlight": {
+      let Icon = Lightbulb;
+      let wrapperClass = "from-amber-500/10 to-amber-500/5 border-amber-500/20";
+      let iconColor = "text-amber-600 dark:text-amber-400 bg-amber-500/10 ring-amber-500/20";
+      let titleColor = "text-amber-900 dark:text-amber-300";
+      let textColor = "text-amber-950/80 dark:text-amber-100/70";
+
+      if (conteudo.icone === "alert") {
+        Icon = AlertTriangle;
+        wrapperClass = "from-red-500/10 to-red-500/5 border-red-500/20";
+        iconColor = "text-red-600 dark:text-red-400 bg-red-500/10 ring-red-500/20";
+        titleColor = "text-red-900 dark:text-red-300";
+        textColor = "text-red-950/80 dark:text-red-100/70";
+      } else if (conteudo.icone === "check") {
+        Icon = CheckCircle;
+        wrapperClass = "from-emerald-500/10 to-emerald-500/5 border-emerald-500/20";
+        iconColor = "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 ring-emerald-500/20";
+        titleColor = "text-emerald-900 dark:text-emerald-300";
+        textColor = "text-emerald-950/80 dark:text-emerald-100/70";
+      } else if (conteudo.icone === "star") {
+        Icon = Star;
+        wrapperClass = "from-google-blue/10 to-google-blue/5 border-google-blue/20";
+        iconColor = "text-google-blue bg-google-blue/10 ring-google-blue/20";
+        titleColor = "text-foreground";
+        textColor = "text-muted-foreground";
+      }
+
+      return (
+        <div className={`relative overflow-hidden bg-gradient-to-br ${wrapperClass} border rounded-3xl p-6 sm:p-8 shadow-sm transition-all hover:shadow-md group`}>
+          <div className="flex items-start gap-5 relative z-10">
+            <div className={`shrink-0 p-3 rounded-2xl ring-4 transition-transform group-hover:scale-105 ${iconColor}`}>
+              <Icon className="h-6 w-6" />
+            </div>
+            <div className="pt-1">
+              {conteudo.titulo && <h4 className={`font-bold text-lg mb-2 tracking-tight ${titleColor}`}>{conteudo.titulo}</h4>}
+              <p className={`text-base leading-relaxed font-medium ${textColor}`}>{conteudo.texto}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    case "timeline": {
+      if (!conteudo.passos || !Array.isArray(conteudo.passos)) return null;
+      return (
+        <div className="my-10 pl-2 sm:pl-4">
+          <div className="relative border-l-[3px] border-muted/60 space-y-8 py-2">
+            {conteudo.passos.map((passo: string, i: number) => (
+              <div key={i} className="relative pl-10 group">
+                {/* Marcador Elegante */}
+                <div className="absolute -left-[11px] top-4 flex h-5 w-5 items-center justify-center rounded-full bg-background border-[4px] border-google-blue ring-4 ring-background transition-all group-hover:scale-125 group-hover:border-google-blue shadow-sm"></div>
+                {/* Card Flutuante */}
+                <div 
+                  className="bg-card hover:bg-muted/30 border border-border/60 hover:border-google-blue/30 rounded-2xl p-6 shadow-sm transition-all text-base leading-relaxed text-foreground/90" 
+                  dangerouslySetInnerHTML={{ __html: inlineFormat(passo) }} 
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    case "quote": {
+      return (
+        <div className="relative my-10 bg-card border border-border/60 rounded-[2rem] p-8 sm:p-12 overflow-hidden shadow-sm group">
+          {/* Ícone de Marca d'água gigante */}
+          <Quote className="absolute -top-6 -left-6 h-40 w-40 text-muted/30 -rotate-12 transition-transform group-hover:rotate-0 duration-700 ease-out" />
+          
+          <div className="relative z-10 pl-4 sm:pl-8">
+            <p className="font-serif text-2xl sm:text-3xl italic leading-relaxed text-foreground/90">
+              "{conteudo.texto}"
+            </p>
+            {conteudo.autor && (
+              <div className="mt-8 flex items-center gap-4">
+                <div className="h-px w-12 bg-google-blue/50"></div>
+                <p className="text-sm font-bold tracking-widest text-muted-foreground uppercase">
+                  {conteudo.autor}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    case "faq": {
+      if (!conteudo.perguntas || !Array.isArray(conteudo.perguntas)) return null;
+      return (
+        <div className="my-10 space-y-8">
+          {conteudo.perguntas.map((q: any, i: number) => (
+            <div key={i} className="group relative pl-8">
+              {/* Linha de recuo em Gradiente (Efeito cascata) */}
+              <div className="absolute left-0 top-1 bottom-0 w-1 bg-gradient-to-b from-google-blue/40 to-transparent rounded-full opacity-40 group-hover:opacity-100 transition-opacity"></div>
+              
+              <h4 className="font-bold text-xl text-foreground tracking-tight flex items-start gap-3 mb-3">
+                <span className="text-google-blue shrink-0 mt-0.5">Q.</span> 
+                {q.pergunta}
+              </h4>
+              <p 
+                className="text-lg text-muted-foreground leading-relaxed" 
+                dangerouslySetInnerHTML={{ __html: inlineFormat(q.resposta) }} 
+              />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "markdown":
+    default: {
+      // Formatação primorosa para texto normal
+      const mBlocks = parseBlocks(conteudo.texto || "");
+      return (
+        <div className="prose prose-zinc dark:prose-invert prose-lg max-w-none text-foreground/80 leading-relaxed font-normal marker:text-google-blue/70">
+          {mBlocks.map((b, i) => renderLegacyBlock(b, i))}
+        </div>
+      );
+    }
+  }
+}
+
+// ============================================================================
+// CÓDIGO LEGADO DO MARKDOWN (MANTIDO PARA RETROCOMPATIBILIDADE)
+// ============================================================================
 
 type Block =
   | { kind: "h1" | "h2" | "h3"; text: string }
@@ -76,14 +250,12 @@ function parseBlocks(input: string): Block[] {
   for (const raw of lines) {
     const line = raw ?? "";
 
-    // fenced code block
     if (line.trim().startsWith("```")) {
       if (!inCode) {
         flushParagraph();
         flushList();
         inCode = true;
       } else {
-        // closing
         flushCode();
         inCode = false;
       }
@@ -116,7 +288,6 @@ function parseBlocks(input: string): Block[] {
       continue;
     }
 
-    // normal text
     paragraph.push(line.trim());
   }
 
@@ -144,16 +315,19 @@ function parseListItem(line: string): string | null {
   return m[1].trim();
 }
 
-function renderBlock(b: Block, key: number) {
-  if (b.kind === "h1") return <h3 key={key} className="mt-0 text-lg font-semibold">{b.text}</h3>;
-  if (b.kind === "h2") return <h4 key={key} className="mt-6 text-base font-semibold">{b.text}</h4>;
-  if (b.kind === "h3") return <h5 key={key} className="mt-4 text-sm font-semibold">{b.text}</h5>;
+function renderLegacyBlock(b: Block, key: number) {
+  if (b.kind === "h1") return <h3 key={key} className="mt-10 mb-5 text-2xl font-extrabold text-foreground tracking-tight">{b.text}</h3>;
+  if (b.kind === "h2") return <h4 key={key} className="mt-8 mb-4 text-xl font-bold text-foreground/90 tracking-tight">{b.text}</h4>;
+  if (b.kind === "h3") return <h5 key={key} className="mt-6 mb-3 text-lg font-semibold text-foreground/80">{b.text}</h5>;
 
   if (b.kind === "ul") {
     return (
-      <ul key={key} className="my-3 list-disc pl-6">
+      <ul key={key} className="my-6 space-y-3">
         {b.items.map((it, i) => (
-          <li key={i} dangerouslySetInnerHTML={{ __html: inlineFormat(it) }} />
+          <li key={i} className="flex items-start gap-3 relative pl-6">
+            <span className="absolute left-0 top-2.5 h-1.5 w-1.5 rounded-full bg-google-blue/60 shrink-0 shadow-sm"></span>
+            <span className="leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(it) }} />
+          </li>
         ))}
       </ul>
     );
@@ -163,16 +337,15 @@ function renderBlock(b: Block, key: number) {
     return (
       <pre
         key={key}
-        className="my-4 overflow-x-auto rounded-xl border border-border bg-[rgba(0,200,232,0.08)] p-4 text-xs leading-relaxed"
+        className="my-6 overflow-x-auto rounded-2xl border border-border/50 bg-muted/30 p-5 text-sm leading-relaxed shadow-sm"
       >
         <code>{b.text}</code>
       </pre>
     );
   }
 
-  // paragraph
   return (
-    <p key={key} className="my-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(b.text) }} />
+    <p key={key} className="my-5 leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(b.text) }} />
   );
 }
 
@@ -185,22 +358,10 @@ function escapeHtml(s: string) {
     .replaceAll("'", "&#039;");
 }
 
-/**
- * Minimal inline formatting on escaped HTML:
- * - **bold**
- * - `code`
- */
 function inlineFormat(s: string) {
   let x = escapeHtml(s);
-
-  // `code`
-  x = x.replace(/`([^`]+)`/g, (_m, g1) => `<code class="rounded bg-[rgba(0,200,232,0.12)] px-1 py-0.5 text-[0.85em]">${g1}</code>`);
-
-  // **bold**
-  x = x.replace(/\*\*([^*]+)\*\*/g, (_m, g1) => `<strong>${g1}</strong>`);
-
-  // line breaks: if someone used \n inside a paragraph block
+  x = x.replace(/`([^`]+)`/g, (_m, g1) => `<code class="rounded-md bg-muted/60 px-1.5 py-0.5 text-[0.9em] font-mono text-google-blue font-medium">${g1}</code>`);
+  x = x.replace(/\*\*([^*]+)\*\*/g, (_m, g1) => `<strong class="font-bold text-foreground">${g1}</strong>`);
   x = x.replace(/\n/g, "<br/>");
-
   return x;
 }
