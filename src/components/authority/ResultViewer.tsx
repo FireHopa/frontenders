@@ -87,43 +87,48 @@ function renderJsonBlock(bloco: any, key: number) {
 
   switch (tipo) {
     case "highlight": {
+      // DESIGN CLARO, VIBRANTE E ULTRA LEGÍVEL
       let Icon = Lightbulb;
-      let wrapperClass = "from-amber-500/10 to-amber-500/5 border-amber-500/20";
-      let iconColor = "text-amber-600 dark:text-amber-400 bg-amber-500/10 ring-amber-500/20";
-      let titleColor = "text-amber-900 dark:text-amber-300";
-      let textColor = "text-amber-950/80 dark:text-amber-100/70";
+      let containerClass = "bg-amber-50 border-amber-200 dark:bg-[#2a2416] dark:border-amber-900/60";
+      let iconWrapper = "bg-amber-200/50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400";
+      let titleClass = "text-amber-900 dark:text-amber-300";
+      let textClass = "text-amber-950/90 dark:text-amber-100/90";
 
       if (conteudo.icone === "alert") {
         Icon = AlertTriangle;
-        wrapperClass = "from-red-500/10 to-red-500/5 border-red-500/20";
-        iconColor = "text-red-600 dark:text-red-400 bg-red-500/10 ring-red-500/20";
-        titleColor = "text-red-900 dark:text-red-300";
-        textColor = "text-red-950/80 dark:text-red-100/70";
+        containerClass = "bg-red-50 border-red-200 dark:bg-[#2a1616] dark:border-red-900/60";
+        iconWrapper = "bg-red-200/50 dark:bg-red-500/20 text-red-600 dark:text-red-400";
+        titleClass = "text-red-900 dark:text-red-300";
+        textClass = "text-red-950/90 dark:text-red-100/90";
       } else if (conteudo.icone === "check") {
         Icon = CheckCircle;
-        wrapperClass = "from-emerald-500/10 to-emerald-500/5 border-emerald-500/20";
-        iconColor = "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 ring-emerald-500/20";
-        titleColor = "text-emerald-900 dark:text-emerald-300";
-        textColor = "text-emerald-950/80 dark:text-emerald-100/70";
+        containerClass = "bg-emerald-50 border-emerald-200 dark:bg-[#162a20] dark:border-emerald-900/60";
+        iconWrapper = "bg-emerald-200/50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400";
+        titleClass = "text-emerald-900 dark:text-emerald-300";
+        textClass = "text-emerald-950/90 dark:text-emerald-100/90";
       } else if (conteudo.icone === "star") {
         Icon = Star;
-        wrapperClass = "from-google-blue/10 to-google-blue/5 border-google-blue/20";
-        iconColor = "text-google-blue bg-google-blue/10 ring-google-blue/20";
-        titleColor = "text-foreground";
-        textColor = "text-muted-foreground";
+        containerClass = "bg-blue-50 border-blue-200 dark:bg-[#16202a] dark:border-blue-900/60";
+        iconWrapper = "bg-blue-200/50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400";
+        titleClass = "text-blue-900 dark:text-blue-300";
+        textClass = "text-blue-950/90 dark:text-blue-100/90";
       }
 
       return (
-        <div className={`relative overflow-hidden bg-gradient-to-br ${wrapperClass} border rounded-3xl p-6 sm:p-8 shadow-sm transition-all hover:shadow-md group`}>
-          <div className="flex items-start gap-5 relative z-10">
-            <div className={`shrink-0 p-3 rounded-2xl ring-4 transition-transform group-hover:scale-105 ${iconColor}`}>
-              <Icon className="h-6 w-6" />
-            </div>
-            <div className="pt-1">
-              {conteudo.titulo && <h4 className={`font-bold text-lg mb-2 tracking-tight ${titleColor}`}>{conteudo.titulo}</h4>}
-              <p className={`text-base leading-relaxed font-medium ${textColor}`}>{conteudo.texto}</p>
-            </div>
-          </div>
+        <div className={`my-8 rounded-3xl border ${containerClass} p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-start gap-5 transition-all`}>
+           <div className={`shrink-0 p-3.5 rounded-full ${iconWrapper}`}>
+             <Icon className="h-7 w-7" strokeWidth={2.5} />
+           </div>
+           <div className="pt-1">
+             {conteudo.titulo && (
+               <h4 className={`font-extrabold text-xl mb-2 tracking-tight ${titleClass}`}>
+                 {conteudo.titulo}
+               </h4>
+             )}
+             <p className={`text-base sm:text-lg leading-relaxed font-medium ${textClass}`}>
+               {conteudo.texto}
+             </p>
+           </div>
         </div>
       );
     }
