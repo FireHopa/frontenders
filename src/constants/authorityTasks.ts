@@ -1,139 +1,59 @@
 export type AuthorityTask = {
   title: string;
-  prompt?: string;
 };
 
 export const YOUTUBE_TASKS: AuthorityTask[] = [
-  { title: 'Nome do Canal com Serviço Principal' },
-  { title: 'Descrição do Canal' },
-  { title: 'Link do Site no Canal' },
-  { title: 'Informações de Contato' },
-  { title: 'Títulos e Descrições (AEO)' },
-  { title: 'Títulos Claros com Tema do Serviço' },
-  { title: 'Descrições Simples de Vídeos' },
-  { title: 'Uso de Palavras do Serviço nos Textos' },
-  { title: 'Textos Respondendo Dúvidas Reais' },
-  { title: 'Textos Explicando Serviços e Processos' },
-  { title: 'Vídeos Explicando Dúvidas Frequentes' },
-  { title: 'Vídeos Explicando Serviços' },
-  { title: 'Vídeos Explicando Como Funciona' },
-  { title: 'Vídeos de Prova Social' },
-  { title: 'Vídeos Apresentando a Empresa' },
-  { title: 'Menção de Cidade/Região (GEO)' },
-  { title: 'Vídeos com Contexto Local' },
-  { title: 'Coerência com Site e Google Perfil' },
+  { title: 'Roteiro de Vídeo Longo (Conteúdo Pilar)' },
+  { title: 'Roteiro de Shorts / Vídeo Curto' },
+  { title: 'Títulos e Descrições Otimizadas (SEO/AEO)' },
+  { title: 'Roteiro Institucional (Sobre a Empresa)' }
 ];
 
 export const INSTAGRAM_TASKS: AuthorityTask[] = [
-  { title: "Bio Clara com Servi\u00e7o, P\u00fablico e Regi\u00e3o" },
-  { title: "Nome Exibido com Palavra\u2011Chave do Servi\u00e7o" },
-  { title: "Categoria Correta do Perfil" },
-  { title: "Link na Bio para P\u00e1gina Estrat\u00e9gica" },
-  { title: "Nome, Site e Contatos Consistentes" },
-  { title: "Destaque de Localiza\u00e7\u00e3o e Atendimento" },
-  { title: "Destaque de Provas Sociais" },
-  { title: "Conte\u00fado em Texto nas Legendas (AEO)" },
-  { title: "Legendas com Contexto do Servi\u00e7o e Regi\u00e3o" },
-  { title: "Uso Consistente do Nome da Empresa e Servi\u00e7o" },
-  { title: "Uso Natural da Cidade/Regi\u00e3o" },
-  { title: "Texto Alternativo (Alt Text) nas Imagens" },
-  { title: "Conte\u00fados Respondendo Perguntas Reais" },
-  { title: "Conte\u00fados Explicando Servi\u00e7os e Processos" },
-  { title: "T\u00edtulos Claros com Tema do Servi\u00e7o" },
-  { title: "V\u00eddeos Explicando D\u00favidas Frequentes" },
-  { title: "V\u00eddeos Explicando Servi\u00e7os e Processos" },
-  { title: "V\u00eddeos de Prova Social" },
-  { title: "V\u00eddeos com Contexto Local" },
-  { title: "Carross\u00e9is com Textos AEO" },
+  { title: 'Roteiro para Reels (Vídeo Curto)' },
+  { title: 'Carrossel Educativo / Conversão' },
+  { title: 'Post Estático (Imagem/Posicionamento)' },
+  { title: 'Roteiro de Sequência para Stories' },
+  { title: 'Otimização de Bio e Destaques' }
 ];
 
 export const TIKTOK_TASKS: AuthorityTask[] = [
-  { title: "Bio Clara com Servi\u00e7o, P\u00fablico e Regi\u00e3o" },
-  { title: "Nome do Perfil com Palavra-Chave do Servi\u00e7o" },
-  { title: "Categoria e Nicho Bem Definidos" },
-  { title: "Link na Bio Estrat\u00e9gico" },
-  { title: "Consist\u00eancia com Site e Google Perfil" },
-  { title: "V\u00eddeos Curtos Respondendo Perguntas Reais (AEO)" },
-  { title: "V\u00eddeos Explicando Servi\u00e7os em 60s" },
-  { title: "V\u00eddeos Mostrando Processos e Bastidores" },
-  { title: "Prova Social em Formato Din\u00e2mico" },
-  { title: "Conte\u00fado com Contexto Local (GEO)" },
-  { title: "Uso Estrat\u00e9gico de Palavras do Servi\u00e7o" },
-  { title: "Legendas com Contexto do Servi\u00e7o e Regi\u00e3o" },
-  { title: "T\u00edtulos Claros na Capa do V\u00eddeo" },
-  { title: "Sequ\u00eancia de Conte\u00fados Educativos" },
-  { title: "Estrutura Padr\u00e3o de V\u00eddeo TikTok para PME" },
+  { title: 'Roteiro de Vídeo Curto (Trend/Dinâmico)' },
+  { title: 'Roteiro Educativo / Resposta a Dúvida (AEO)' },
+  { title: 'Otimização de Bio e Identidade do Perfil' }
 ];
 
 export const LINKEDIN_TASKS: AuthorityTask[] = [
-  { title: "T\u00edtulo Profissional com Palavra\u2011Chave" },
-  { title: "Sobre (Resumo Estrat\u00e9gico AEO)" },
-  { title: "Estrutura de Servi\u00e7os na Experi\u00eancia" },
-  { title: "Conte\u00fados em Formato AEO" },
-  { title: "Artigos Explicando Servi\u00e7os" },
-  { title: "Prova Social Profissional" },
-  { title: "Coer\u00eancia com Site e Google" },
+  { title: 'Post Educacional / Opinião Técnica' },
+  { title: 'Estudo de Caso / Resultado B2B' },
+  { title: 'Otimização de Perfil Pessoal (Headline e Sobre)' },
+  { title: 'Otimização de LinkedIn Page (Empresa)' }
 ];
 
 export const GOOGLE_BUSINESS_PROFILE_TASKS: AuthorityTask[] = [
-  { title: "Nome da Empresa (Consist\u00eancia Absoluta)" },
-  { title: "Categoria Principal Estrat\u00e9gica" },
-  { title: "Descri\u00e7\u00e3o Clara com Servi\u00e7o + Regi\u00e3o (GEO)" },
-  { title: "Servi\u00e7os Cadastrados com Palavra\u2011Chave" },
-  { title: "\u00c1rea de Atendimento (GEO Estruturado)" },
-  { title: "Fotos com Contexto Real do Atendimento" },
-  { title: "Respostas Estrat\u00e9gicas \u00e0s Avalia\u00e7\u00f5es" },
-  { title: "Postagens no Google (AEO)" },
-  { title: "Perguntas e Respostas (FAQ AEO)" },
+  { title: 'Postagem de Atualização / Oferta' },
+  { title: 'Responder Dúvidas Frequentes (FAQ)' },
+  { title: 'Otimização de Serviços e Descrição (SEO Local)' }
 ];
 
 export const EXTERNAL_MENTIONS_TASKS: AuthorityTask[] = [
-  { title: "Auditoria de Nome da Empresa" },
-  { title: "Auditoria do Servi\u00e7o Principal" },
-  { title: "Auditoria de Cidade / Regi\u00e3o (GEO)" },
-  { title: "Auditoria de Mensagem Principal" },
-  { title: "Compara\u00e7\u00e3o Geral entre Canais" },
-  { title: "Checklist de Corre\u00e7\u00f5es" },
-  { title: "Plano de Padroniza\u00e7\u00e3o" },
+  { title: 'Kit de Menção (Textos Oficiais da Empresa)' },
+  { title: 'Modelo de Mini Apresentação (Pitch)' },
+  { title: 'Artigo / Release para Imprensa ou Parceiros' }
 ];
 
 export const SITE_TASKS: AuthorityTask[] = [
-  { title: "Blog Estratégico (Autoridade + AEO)" },
-  { title: "FAQ Estratégico (AEO)" },
-  { title: "Texto Sobre a Empresa" },
-  { title: "Página de Serviço Principal" },
-  { title: "Página de Serviço Secundário" },
-  { title: "Página de Área de Atuação (GEO)" },
-  { title: "Página de Processo / Como Funciona" },
-  { title: "Página de Prova Social" },
-  { title: "Página de Contato Estratégica" },
-  { title: "Estrutura de Home Estratégica" },
-  { title: "Plano de Interlinkagem Interna" },
-  { title: "Padronização SEO Técnica" },
+  { title: 'Artigo de Blog Otimizado (SEO/AEO/GEO)' },
+  { title: 'FAQ (Perguntas Frequentes)' },
+  { title: 'Página de Serviço / Produto' },
+  { title: 'Página Institucional (Sobre a Empresa)' }
 ];
 
-// NOVAS TAREFAS DE DECISÃO AQUI
 export const DECISION_CONTENT_TASKS: AuthorityTask[] = [
-  { 
-    title: "FAQ",
-    prompt: "Gere um FAQ completo e persuasivo focado na quebra de objeções. IMPORTANTE: Leia o JSON do núcleo fornecido e busque a chave 'selected_theme'. O FAQ deve ser EXCLUSIVAMENTE sobre o tema definido em 'selected_theme'. Estruture perguntas e respostas diretas, sem invenção de dados."
-  },
-  { 
-    title: "BLOG otimizado para AEO, GEO e SEO",
-    prompt: "Escreva um artigo de Blog completo focado em conversão e autoridade (AEO, GEO e SEO). IMPORTANTE: Leia o JSON do núcleo e busque a chave 'selected_theme'. O artigo deve ser focado EXCLUSIVAMENTE nesse tema. Use H1, H2, H3, introdução cativante e chamada para ação no final."
-  },
-  { 
-    title: "Página de Destino (Landing Page)",
-    prompt: "Crie a estrutura e a copy completa para uma Landing Page de alta conversão. Use as informações do núcleo para definir a promessa principal, para quem é, benefícios, quebra de objeções e CTA."
-  },
-  { 
-    title: "E-mail de Quebra de Objeções",
-    prompt: "Escreva um e-mail persuasivo com o objetivo único de quebrar as principais objeções de um cliente que quase comprou mas parou no meio do caminho. Mantenha um tom profissional, acolhedor e focado na solução."
-  },
-  { 
-    title: "Comparativo: Nós vs Concorrentes",
-    prompt: "Crie um texto de decisão comparando implicitamente a solução da empresa (baseado no núcleo) com o mercado comum. Destaque os diferenciais reais sem citar nomes de concorrentes específicos, focando em gerar valor e confiança."
-  },
+  { title: 'FAQ Focado em Quebra de Objeções' },
+  { title: 'Landing Page (Página de Destino de Alta Conversão)' },
+  { title: 'E-mail Persuasivo de Recuperação/Decisão' },
+  { title: 'Comparativo: Nossa Solução vs Mercado' }
 ];
 
 export function tasksByAgentKey(agentKey?: string | null): AuthorityTask[] {
@@ -153,7 +73,7 @@ export function tasksByAgentKey(agentKey?: string | null): AuthorityTask[] {
       return EXTERNAL_MENTIONS_TASKS;
     case "site":
       return SITE_TASKS;
-    case "decision_content": // <-- NOVO AGENTE MAPEADO
+    case "decision_content": 
       return DECISION_CONTENT_TASKS;
     default:
       return [];
