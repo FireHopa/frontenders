@@ -211,6 +211,7 @@ export default function AuthorityAgentRunPage() {
   const agent = AUTHORITY_AGENTS.find((a) => a.key === agentKey);
   const tasks = agentKey ? tasksByAgentKey(agentKey) : [];
 
+  // APENAS ABRE O MODAL (não gasta mais créditos sozinhos)
   async function handleOpenTask(taskTitle?: string) {
     if (!agentKey) return;
     if (!user || user.credits < 5) {
@@ -222,28 +223,35 @@ export default function AuthorityAgentRunPage() {
     setThemeModalTask(taskName);
     setSuggestedThemes([]);
     setCustomTheme("");
-    setIsFetchingThemes(true);
+  }
 
+  // NOVA FUNÇÃO: GERA OS TEMAS CUSTANDO 2 CRÉDITOS
+  async function handleGenerateThemesWithIA() {
+    if (!agentKey || !themeModalTask) return;
+    if (!user || user.credits < 2) {
+      toastApiError(new Error("Precisas de pelo menos 2 créditos para gerar sugestões de temas."), "Créditos Insuficientes");
+      return;
+    }
+
+    setIsFetchingThemes(true);
     try {
       const rawNucleus = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
       const res = await api.authorityAgents.suggestThemes({
         agent_key: agentKey,
-        task: taskName,
+        task: themeModalTask,
         nucleus: rawNucleus
       });
+      deductCredits(2); // Atualiza os créditos no frontend
       setSuggestedThemes(res.themes || []);
+      toastSuccess("Temas gerados com sucesso!");
     } catch (e: any) {
       toastApiError(e, "Falha ao buscar sugestões de temas. Tente escrever o seu próprio.");
-      setSuggestedThemes([
-        "Os 5 principais mitos do nosso serviço",
-        "Como funciona o nosso processo passo a passo",
-        "Respondendo as dúvidas mais comuns dos nossos clientes"
-      ]);
     } finally {
       setIsFetchingThemes(false);
     }
   }
 
+  // EXECUTA A TAREFA FINAL CUSTANDO 5 CRÉDITOS (Acontece em runGlobal no backend)
   async function executeTask(finalTheme: string) {
     if (!agentKey) return;
     
@@ -458,10 +466,21 @@ export default function AuthorityAgentRunPage() {
       {/* MODAL DE TEMAS */}
       <AnimatePresence>
         {themeModalTask && (
-          <motion.div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="w-full max-w-2xl bg-card border rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+          <motion.div 
+            className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] pb-6 px-4 bg-background/80 backdrop-blur-sm" 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+          >
+            <motion.div 
+              layout
+              initial={{ scale: 0.95, opacity: 0, y: 10 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 10 }} 
+              className="w-full max-w-2xl bg-card border rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh]"
+            >
               
-              <div className="px-6 py-4 border-b flex items-center justify-between bg-background/50">
+              <div className="px-6 py-4 border-b flex items-center justify-between bg-background/50 shrink-0">
                 <div>
                   <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
                     <Sparkles className="h-5 w-5 text-google-blue" /> Escolha o Foco do Conteúdo
@@ -473,45 +492,61 @@ export default function AuthorityAgentRunPage() {
                 </Button>
               </div>
               
-              <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh] bg-background/30 custom-scrollbar">
+              <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-background/30 custom-scrollbar">
+                
+                {/* 1. OPÇÃO PADRÃO: USUÁRIO ESCREVE O PRÓPRIO TEMA */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-foreground px-1 uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    Escreva o foco/tema do conteúdo
+                  </label>
+                  <div className="flex gap-2">
+                    <Input 
+                      value={customTheme} 
+                      onChange={e => setCustomTheme(e.target.value)} 
+                      placeholder="Ex: Por que a nossa solução é melhor..." 
+                      className="rounded-xl shadow-sm h-11"
+                      onKeyDown={e => e.key === 'Enter' && customTheme.trim() && executeTask(customTheme)}
+                    />
+                    <Button disabled={!customTheme.trim() || loading} variant="accent" className="rounded-xl shrink-0 h-11 px-6 shadow-sm" onClick={() => executeTask(customTheme)}>
+                      Gerar Conteúdo
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border/50"></span></div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-3 text-muted-foreground rounded-full border border-border/50">Ou peça ajuda à IA</span>
+                  </div>
+                </div>
+
+                {/* 2. OPÇÃO COM CRÉDITOS: IA GERA TEMAS */}
                 {isFetchingThemes ? (
-                   <div className="py-12 flex flex-col items-center justify-center gap-4">
+                   <div className="py-8 flex flex-col items-center justify-center gap-4">
                      <Loader2 className="h-10 w-10 text-google-blue animate-spin" />
                      <p className="text-sm font-medium text-muted-foreground animate-pulse">A IA está a analisar o núcleo e a pensar em temas virais...</p>
                    </div>
-                ) : (
-                  <>
-                    <div className="space-y-3">
-                      <label className="text-sm font-semibold text-foreground px-1 uppercase tracking-wider text-muted-foreground">Sugestões Estratégicas</label>
-                      <div className="grid gap-2">
-                        {suggestedThemes.map((theme, idx) => (
-                          <Button key={idx} variant="outline" className="h-auto py-3.5 px-4 justify-start text-left font-medium whitespace-normal bg-card hover:bg-[rgba(0,200,232,0.05)] hover:border-google-blue/30 hover:text-google-blue transition-all rounded-xl shadow-sm" onClick={() => executeTask(theme)}>
-                            <ArrowRight className="h-4 w-4 mr-3 shrink-0 opacity-50" />
-                            {theme}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3 pt-6 border-t border-border/50">
-                      <label className="text-sm font-semibold text-foreground px-1 uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                        Ou escreva o seu próprio tema
-                      </label>
-                      <div className="flex gap-2">
-                        <Input 
-                          value={customTheme} 
-                          onChange={e => setCustomTheme(e.target.value)} 
-                          placeholder="Ex: Por que a nossa solução é melhor que a do concorrente X..." 
-                          className="rounded-xl shadow-sm h-11"
-                          onKeyDown={e => e.key === 'Enter' && customTheme.trim() && executeTask(customTheme)}
-                        />
-                        <Button disabled={!customTheme.trim() || loading} variant="accent" className="rounded-xl shrink-0 h-11 px-6 shadow-sm" onClick={() => executeTask(customTheme)}>
-                          Gerar
+                ) : suggestedThemes.length > 0 ? (
+                  <motion.div layout className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <label className="text-sm font-semibold text-foreground px-1 uppercase tracking-wider text-muted-foreground">Sugestões Estratégicas (IA)</label>
+                    <div className="grid gap-2">
+                      {suggestedThemes.map((theme, idx) => (
+                        <Button key={idx} variant="outline" className="h-auto py-3.5 px-4 justify-start text-left font-medium whitespace-normal bg-card hover:bg-[rgba(0,200,232,0.05)] hover:border-google-blue/30 hover:text-google-blue transition-all rounded-xl shadow-sm" onClick={() => executeTask(theme)}>
+                          <ArrowRight className="h-4 w-4 mr-3 shrink-0 opacity-50" />
+                          {theme}
                         </Button>
-                      </div>
+                      ))}
                     </div>
-                  </>
+                  </motion.div>
+                ) : (
+                  <motion.div layout className="flex justify-center">
+                    <Button variant="outline" className="rounded-xl shadow-sm hover:text-google-blue hover:bg-google-blue/5 border-dashed w-full py-6 transition-all" onClick={handleGenerateThemesWithIA}>
+                      <Sparkles className="h-5 w-5 mr-2 text-google-blue" />
+                      Gerar 5 Temas com IA (Custa 2 Créditos)
+                    </Button>
+                  </motion.div>
                 )}
+
               </div>
             </motion.div>
           </motion.div>
