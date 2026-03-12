@@ -23,6 +23,7 @@ import AuthorityNucleusPage from "@/pages/AuthorityNucleusPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import AccountPage from "@/pages/AccountPage";
 import LinkedInCallbackPage from "@/pages/LinkedInCallbackPage";
+import ImageEnginePage from "@/pages/ImageEnginePage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
           { path: "projects", element: <ProjectsPage /> },
           { path: "materials", element: <MaterialsPage /> },
           { path: "video", element: <VideoPage /> },
+          { path: "image-engine", element: <ImageEnginePage /> }, //
           { path: "authority-agents", element: <AuthorityAgentsPage /> },
           { path: "authority-agents/nucleus", element: <AuthorityNucleusPage /> },
           { path: "authority-agents/chat/:agentKey", element: <AuthorityAgentChatPage /> },
