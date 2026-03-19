@@ -4,7 +4,6 @@ import { AppShell } from "@/components/layout/AppShell";
 import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 
-// IMPORTAÇÕES DIRETAS (Sem esconder erros)
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import LandingPage from "@/pages/LandingPage";
@@ -24,41 +23,44 @@ import NotFoundPage from "@/pages/NotFoundPage";
 import AccountPage from "@/pages/AccountPage";
 import LinkedInCallbackPage from "@/pages/LinkedInCallbackPage";
 import ImageEnginePage from "@/pages/ImageEnginePage";
+import { FacebookCallbackPage } from "@/pages/FacebookCallbackPage";
+import YouTubeCallbackPage from "@/pages/YouTubeCallbackPage";
+import TikTokCallbackPage from "@/pages/TikTokCallbackPage";
+import GoogleBusinessCallbackPage from "@/pages/GoogleBusinessCallbackPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
-  
-  // Rota do Callback do LinkedIn
   { path: "/api/linkedin/callback", element: <LinkedInCallbackPage /> },
-
+  { path: "/auth/facebook/callback", element: <FacebookCallbackPage /> },
+  { path: "/auth/youtube/callback", element: <YouTubeCallbackPage /> },
+  { path: "/auth/tiktok/callback", element: <TikTokCallbackPage /> },
+  { path: "/auth/google-business/callback", element: <GoogleBusinessCallbackPage /> },
   {
     path: "/",
     element: <AppShell />,
     errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <LandingPage /> },
-
       {
-        element: <ProtectedRoute />, 
+        element: <ProtectedRoute />,
         children: [
-          { path: "journey", element: <JourneyPage /> }, 
+          { path: "journey", element: <JourneyPage /> },
           { path: "dashboard", element: <DashboardPage /> },
-          { path: "conta", element: <AccountPage /> }, 
+          { path: "conta", element: <AccountPage /> },
           { path: "robots/:publicId", element: <RobotDetailPage /> },
           { path: "robots/:publicId/chat", element: <RobotChatPage /> },
           { path: "competition", element: <CompetitionPage /> },
           { path: "projects", element: <ProjectsPage /> },
           { path: "materials", element: <MaterialsPage /> },
           { path: "video", element: <VideoPage /> },
-          { path: "image-engine", element: <ImageEnginePage /> }, //
+          { path: "image-engine", element: <ImageEnginePage /> },
           { path: "authority-agents", element: <AuthorityAgentsPage /> },
           { path: "authority-agents/nucleus", element: <AuthorityNucleusPage /> },
           { path: "authority-agents/chat/:agentKey", element: <AuthorityAgentChatPage /> },
           { path: "authority-agents/run/:agentKey", element: <AuthorityAgentRunPage /> },
-        ]
+        ],
       },
-
       { path: "*", element: <NotFoundPage /> },
     ],
   },

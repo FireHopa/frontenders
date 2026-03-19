@@ -12,6 +12,9 @@ import {
   Repeat2,
   AlignLeft,
   ListVideo,
+  Search,
+  MessageSquareQuote,
+  Tag,
 } from "lucide-react";
 
 type Props = {
@@ -470,6 +473,105 @@ function renderJsonBlock(bloco: any, key: number) {
             </div>
           ))}
         </div>
+      );
+    }
+
+    case "keyword_list": {
+      if (!conteudo.items || !Array.isArray(conteudo.items)) return null;
+      return (
+        <section key={key} className="my-10 rounded-[2rem] border border-border/70 bg-background/50 p-5 sm:p-7 shadow-sm">
+          <div className="mb-5 flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-google-blue/10 text-google-blue">
+              <Search className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Lista técnica</p>
+              <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">{conteudo.titulo || "Palavras-chave"}</h3>
+              {conteudo.limite_por_item ? (
+                <p className="mt-1 text-sm text-muted-foreground">Limite por item: {conteudo.limite_por_item}</p>
+              ) : null}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {conteudo.items.map((item: string, idx: number) => (
+              <div key={idx} className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-google-blue/80">
+                  <Tag className="h-3.5 w-3.5" />
+                  Palavra-chave {idx + 1}
+                </div>
+                <p className="text-sm sm:text-base leading-relaxed text-foreground/90">{item}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    case "service_cards": {
+      if (!conteudo.items || !Array.isArray(conteudo.items)) return null;
+      return (
+        <section key={key} className="my-10 rounded-[2rem] border border-border/70 bg-background/50 p-5 sm:p-7 shadow-sm">
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-google-blue/10 text-google-blue">
+              <ListVideo className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Catálogo técnico</p>
+              <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">{conteudo.titulo || "Serviços e descrições"}</h3>
+            </div>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {conteudo.items.map((item: any, idx: number) => (
+              <article key={idx} className="rounded-[1.75rem] border border-border/70 bg-card/90 p-5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h4 className="text-lg font-extrabold tracking-tight text-foreground">{item.nome}</h4>
+                  <span className="shrink-0 rounded-full bg-google-blue/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-google-blue">Serviço</span>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Descrição curta</p>
+                  <p className="text-sm sm:text-base leading-relaxed text-foreground/90">{item.descricao}</p>
+                </div>
+                {Array.isArray(item.palavras_chave) && item.palavras_chave.length > 0 ? (
+                  <div className="mt-4">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Palavras-chave relacionadas</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.palavras_chave.map((keyword: string, keywordIdx: number) => (
+                        <span key={keywordIdx} className="rounded-full border border-google-blue/20 bg-google-blue/5 px-3 py-1.5 text-xs font-medium text-foreground/85">
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    case "response_variations": {
+      if (!conteudo.items || !Array.isArray(conteudo.items)) return null;
+      return (
+        <section key={key} className="my-10 rounded-[2rem] border border-border/70 bg-background/50 p-5 sm:p-7 shadow-sm">
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-google-blue/10 text-google-blue">
+              <MessageSquareQuote className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Respostas prontas</p>
+              <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">{conteudo.titulo || "Sugestões de resposta"}</h3>
+            </div>
+          </div>
+          <div className="grid gap-4">
+            {conteudo.items.map((item: string, idx: number) => (
+              <div key={idx} className="rounded-[1.5rem] border border-border/70 bg-card/90 p-5 shadow-sm">
+                <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-google-blue/80">Resposta {idx + 1}</div>
+                <p className="text-sm sm:text-base leading-relaxed text-foreground/90">{item}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       );
     }
 

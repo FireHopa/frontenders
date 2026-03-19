@@ -8,10 +8,22 @@ import { Input } from "@/components/ui/input";
 import { BusinessCore3D } from "@/components/authority/BusinessCore3D";
 import ResultViewer from "@/components/authority/ResultViewer";
 import { api, getClientId } from "@/services/robots";
+import { linkedinService } from "@/services/linkedin";
+import { instagramService } from "@/services/instagram";
+import { facebookService, type FacebookPage } from "@/services/facebook";
+import { youtubeService } from "@/services/youtube";
+import { tiktokService, type TikTokPrivacyLevel } from "@/services/tiktok";
 import { authorityAgentByKey } from "@/constants/authorityAgents";
-import { tasksByAgentKey } from "@/constants/authorityTasks";
+import { tasksByAgentKey, type AuthorityTask } from "@/constants/authorityTasks";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Loader2, Sparkles, RotateCcw, Printer, ChevronDown, FileText } from "lucide-react";
+import { toastSuccess, toastApiError } from "@/lib/toast";
+import { useAuthStore } from "@/state/authStore";
+import { PublishModal } from "@/components/linkedin/PublishModal";
+import { InstagramPublishModal, type InstagramPublishValues } from "@/components/instagram/InstagramPublishModal";
+import { FacebookPublishModal, type FacebookPublishValues } from "@/components/facebook/FacebookPublishModal";
+import { YouTubePublishModal, type YouTubePublishValues } from "@/components/youtube/YouTubePublishModal";
+import { TikTokPublishModal, type TikTokPublishValues } from "@/components/tiktok/TikTokPublishModal";
+import { ArrowLeft, Loader2, Sparkles, RotateCcw, Printer, ChevronDown, FileText, Linkedin, Instagram, Facebook, Youtube } from "lucide-react";
 
 const STORAGE_KEY = "ori_authority_nucleus_v1";
 
@@ -56,7 +68,7 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
       }
       data.blocos.forEach((b: any) => {
         if (b.tipo === "markdown") {
-          let html = b.conteudo.texto
+          const html = b.conteudo.texto
             .replace(/^### (.*$)/gim, '<h4 style="color: #444; margin-top: 16px;">$1</h4>')
             .replace(/^## (.*$)/gim, '<h3 style="color: #333; margin-top: 20px;">$1</h3>')
             .replace(/^# (.*$)/gim, '<h2 style="color: #222; margin-top: 24px;">$1</h2>')
@@ -68,32 +80,59 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
           out += `<div style="background-color: #f8f9fa; border-left: 4px solid #00c8e8; padding: 15px; margin: 20px 0; border-radius: 4px;">`;
           if (b.conteudo.titulo) out += `<strong style="display: block; font-size: 16px; margin-bottom: 8px; color: #009eb8;">💡 ${b.conteudo.titulo}</strong>`;
           out += `<span style="color: #333;">${b.conteudo.texto}</span></div>`;
-        } else if (b.tipo === "timeline") {
-          if (b.conteudo.passos) {
-            out += `<ul style="list-style-type: none; padding-left: 0; margin: 20px 0;">`;
-            b.conteudo.passos.forEach((p: string) => {
-              let html = p.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-              out += `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; top: 0; color: #00c8e8;">•</span>${html}</li>`;
-            });
-            out += `</ul>`;
-          }
+        } else if (b.tipo === "timeline" && b.conteudo.passos) {
+          out += `<ul style="list-style-type: none; padding-left: 0; margin: 20px 0;">`;
+          b.conteudo.passos.forEach((p: string) => {
+            const html = p.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+            out += `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; top: 0; color: #00c8e8;">•</span>${html}</li>`;
+          });
+          out += `</ul>`;
         } else if (b.tipo === "quote") {
           out += `<blockquote style="font-style: italic; border-left: 4px solid #ccc; padding: 10px 20px; margin: 20px 0; color: #555; background: #f9f9f9;">`;
           out += `"${b.conteudo.texto}"`;
           if (b.conteudo.autor) out += `<br><strong style="display: block; margin-top: 10px; font-style: normal; color: #333;">— ${b.conteudo.autor}</strong>`;
           out += `</blockquote>`;
-        } else if (b.tipo === "faq") {
-          if (b.conteudo.perguntas) {
-            out += `<div style="margin: 20px 0;">`;
-            b.conteudo.perguntas.forEach((q: any) => {
-              let htmlResp = q.resposta.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-              out += `<div style="margin-bottom: 15px;">`;
-              out += `<strong style="display: block; font-size: 15px; margin-bottom: 5px; color: #222;">❓ ${q.pergunta}</strong>`;
-              out += `<p style="margin: 0; padding-left: 24px; color: #444;">${htmlResp}</p>`;
-              out += `</div>`;
-            });
+        } else if (b.tipo === "faq" && b.conteudo.perguntas) {
+          out += `<div style="margin: 20px 0;">`;
+          b.conteudo.perguntas.forEach((q: any) => {
+            const htmlResp = q.resposta.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+            out += `<div style="margin-bottom: 15px;">`;
+            out += `<strong style="display: block; font-size: 15px; margin-bottom: 5px; color: #222;">❓ ${q.pergunta}</strong>`;
+            out += `<p style="margin: 0; padding-left: 24px; color: #444;">${htmlResp}</p>`;
             out += `</div>`;
-          }
+          });
+          out += `</div>`;
+        } else if (b.tipo === "keyword_list" && b.conteudo.items) {
+          out += `<div style="margin: 20px 0;">`;
+          if (b.conteudo.titulo) out += `<h3 style="color:#222; margin-bottom: 8px;">${b.conteudo.titulo}</h3>`;
+          if (b.conteudo.limite_por_item) out += `<p style="margin:0 0 12px; color:#666; font-size:13px;">Limite: ${b.conteudo.limite_por_item}</p>`;
+          out += `<div style="display:grid; gap:8px;">`;
+          b.conteudo.items.forEach((item: string) => {
+            out += `<div style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; background:#fafafa;">${item}</div>`;
+          });
+          out += `</div></div>`;
+        } else if (b.tipo === "service_cards" && b.conteudo.items) {
+          out += `<div style="margin: 20px 0;">`;
+          if (b.conteudo.titulo) out += `<h3 style="color:#222; margin-bottom: 12px;">${b.conteudo.titulo}</h3>`;
+          out += `<div style="display:grid; gap:12px;">`;
+          b.conteudo.items.forEach((item: any) => {
+            out += `<div style="padding:14px; border:1px solid #e5e7eb; border-radius:16px; background:#fff;">`;
+            out += `<strong style="display:block; font-size:16px; margin-bottom:6px;">${item.nome}</strong>`;
+            out += `<p style="margin:0 0 10px; color:#444;">${item.descricao}</p>`;
+            if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) {
+              out += `<p style="margin:0; color:#666; font-size:13px;"><strong>Palavras-chave:</strong> ${item.palavras_chave.join(' • ')}</p>`;
+            }
+            out += `</div>`;
+          });
+          out += `</div></div>`;
+        } else if (b.tipo === "response_variations" && b.conteudo.items) {
+          out += `<div style="margin: 20px 0;">`;
+          if (b.conteudo.titulo) out += `<h3 style="color:#222; margin-bottom: 12px;">${b.conteudo.titulo}</h3>`;
+          out += `<div style="display:grid; gap:10px;">`;
+          b.conteudo.items.forEach((item: string) => {
+            out += `<div style="padding:12px 14px; border:1px solid #e5e7eb; border-radius:14px; background:#fafafa;">${item}</div>`;
+          });
+          out += `</div></div>`;
         }
       });
       out += `</div>`;
@@ -104,7 +143,7 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
       if (data.titulo_da_tela) out += `*${data.titulo_da_tela.toUpperCase()}*\n\n`;
       data.blocos.forEach((b: any) => {
         if (b.tipo === "markdown") {
-          let text = b.conteudo.texto
+          const text = b.conteudo.texto
             .replace(/^### (.*$)/gim, '*$1*')
             .replace(/^## (.*$)/gim, '*$1*')
             .replace(/^# (.*$)/gim, '*$1*')
@@ -112,25 +151,35 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
           out += `${text}\n\n`;
         } else if (b.tipo === "highlight") {
           out += `💡 *${(b.conteudo.titulo || 'Atenção').toUpperCase()}*\n_${b.conteudo.texto}_\n\n`;
-        } else if (b.tipo === "timeline") {
-          if (b.conteudo.passos) {
-            b.conteudo.passos.forEach((p: string) => {
-              let text = p.replace(/\*\*/g, '*');
-              out += `🔹 ${text}\n`;
-            });
-            out += "\n";
-          }
+        } else if (b.tipo === "timeline" && b.conteudo.passos) {
+          b.conteudo.passos.forEach((p: string) => {
+            const text = p.replace(/\*\*/g, '*');
+            out += `🔹 ${text}\n`;
+          });
+          out += "\n";
         } else if (b.tipo === "quote") {
           out += `"${b.conteudo.texto}"\n`;
           if (b.conteudo.autor) out += `— _${b.conteudo.autor}_\n`;
           out += "\n";
-        } else if (b.tipo === "faq") {
-          if (b.conteudo.perguntas) {
-            b.conteudo.perguntas.forEach((q: any) => {
-              let text = q.resposta.replace(/\*\*/g, '*');
-              out += `❓ *${q.pergunta}*\n${text}\n\n`;
-            });
-          }
+        } else if (b.tipo === "faq" && b.conteudo.perguntas) {
+          b.conteudo.perguntas.forEach((q: any) => {
+            const text = q.resposta.replace(/\*\*/g, '*');
+            out += `❓ *${q.pergunta}*\n${text}\n\n`;
+          });
+        } else if (b.tipo === "keyword_list" && b.conteudo.items) {
+          if (b.conteudo.titulo) out += `*${b.conteudo.titulo}*\n`;
+          b.conteudo.items.forEach((item: string) => { out += `• ${item}\n`; });
+          out += `\n`;
+        } else if (b.tipo === "service_cards" && b.conteudo.items) {
+          if (b.conteudo.titulo) out += `*${b.conteudo.titulo}*\n\n`;
+          b.conteudo.items.forEach((item: any) => {
+            out += `*${item.nome}*\n${item.descricao}\n`;
+            if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) out += `_Palavras-chave:_ ${item.palavras_chave.join(' • ')}\n`;
+            out += `\n`;
+          });
+        } else if (b.tipo === "response_variations" && b.conteudo.items) {
+          if (b.conteudo.titulo) out += `*${b.conteudo.titulo}*\n\n`;
+          b.conteudo.items.forEach((item: string, idx: number) => { out += `*Resposta ${idx + 1}*\n${item}\n\n`; });
         }
       });
       return out.trim();
@@ -141,7 +190,7 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
       if (data.titulo_da_tela) out += `${"=".repeat(data.titulo_da_tela.length)}\n\n`;
       data.blocos.forEach((b: any) => {
         if (b.tipo === "markdown") {
-          let text = b.conteudo.texto
+          const text = b.conteudo.texto
             .replace(/^### (.*$)/gim, '$1')
             .replace(/^## (.*$)/gim, '$1')
             .replace(/^# (.*$)/gim, '$1')
@@ -149,25 +198,35 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
           out += `${text}\n\n`;
         } else if (b.tipo === "highlight") {
           out += `>> DICA: ${b.conteudo.titulo ? b.conteudo.titulo.toUpperCase() : 'ATENÇÃO'}\n${b.conteudo.texto}\n\n`;
-        } else if (b.tipo === "timeline") {
-          if (b.conteudo.passos) {
-            b.conteudo.passos.forEach((p: string) => {
-              let text = p.replace(/\*\*/g, '');
-              out += `- ${text}\n`;
-            });
-            out += "\n";
-          }
+        } else if (b.tipo === "timeline" && b.conteudo.passos) {
+          b.conteudo.passos.forEach((p: string) => {
+            const text = p.replace(/\*\*/g, '');
+            out += `- ${text}\n`;
+          });
+          out += "\n";
         } else if (b.tipo === "quote") {
           out += `"${b.conteudo.texto}"\n`;
           if (b.conteudo.autor) out += `— ${b.conteudo.autor}\n`;
           out += "\n";
-        } else if (b.tipo === "faq") {
-          if (b.conteudo.perguntas) {
-            b.conteudo.perguntas.forEach((q: any) => {
-              let text = q.resposta.replace(/\*\*/g, '');
-              out += `P: ${q.pergunta}\nR: ${text}\n\n`;
-            });
-          }
+        } else if (b.tipo === "faq" && b.conteudo.perguntas) {
+          b.conteudo.perguntas.forEach((q: any) => {
+            const text = q.resposta.replace(/\*\*/g, '');
+            out += `P: ${q.pergunta}\nR: ${text}\n\n`;
+          });
+        } else if (b.tipo === "keyword_list" && b.conteudo.items) {
+          if (b.conteudo.titulo) out += `${b.conteudo.titulo}\n`;
+          b.conteudo.items.forEach((item: string) => { out += `- ${item}\n`; });
+          out += `\n`;
+        } else if (b.tipo === "service_cards" && b.conteudo.items) {
+          if (b.conteudo.titulo) out += `${b.conteudo.titulo}\n\n`;
+          b.conteudo.items.forEach((item: any) => {
+            out += `${item.nome}\n${item.descricao}\n`;
+            if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) out += `Palavras-chave: ${item.palavras_chave.join(' | ')}\n`;
+            out += `\n`;
+          });
+        } else if (b.tipo === "response_variations" && b.conteudo.items) {
+          if (b.conteudo.titulo) out += `${b.conteudo.titulo}\n\n`;
+          b.conteudo.items.forEach((item: string, idx: number) => { out += `Resposta ${idx + 1}:\n${item}\n\n`; });
         }
       });
       return out.trim();
@@ -179,29 +238,39 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
         out += `${b.conteudo.texto}\n\n`;
       } else if (b.tipo === "highlight") {
         out += `💡 **${b.conteudo.titulo || 'Atenção'}**\n${b.conteudo.texto}\n\n`;
-      } else if (b.tipo === "timeline") {
-        if (b.conteudo.passos) {
-          b.conteudo.passos.forEach((p: string) => out += `• ${p}\n`);
-          out += "\n";
-        }
+      } else if (b.tipo === "timeline" && b.conteudo.passos) {
+        b.conteudo.passos.forEach((p: string) => (out += `• ${p}\n`));
+        out += "\n";
       } else if (b.tipo === "quote") {
         out += `> "${b.conteudo.texto}"\n`;
         if (b.conteudo.autor) out += `> — ${b.conteudo.autor}\n`;
         out += "\n";
-      } else if (b.tipo === "faq") {
-        if (b.conteudo.perguntas) {
-          b.conteudo.perguntas.forEach((q: any) => {
-            out += `**P: ${q.pergunta}**\nR: ${q.resposta}\n\n`;
-          });
-        }
+      } else if (b.tipo === "faq" && b.conteudo.perguntas) {
+        b.conteudo.perguntas.forEach((q: any) => {
+          out += `**P: ${q.pergunta}**\nR: ${q.resposta}\n\n`;
+        });
+      } else if (b.tipo === "keyword_list" && b.conteudo.items) {
+        if (b.conteudo.titulo) out += `## ${b.conteudo.titulo}\n\n`;
+        b.conteudo.items.forEach((item: string) => { out += `- ${item}\n`; });
+        out += `\n`;
+      } else if (b.tipo === "service_cards" && b.conteudo.items) {
+        if (b.conteudo.titulo) out += `## ${b.conteudo.titulo}\n\n`;
+        b.conteudo.items.forEach((item: any) => {
+          out += `### ${item.nome}\n${item.descricao}\n\n`;
+          if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) out += `**Palavras-chave:** ${item.palavras_chave.join(' • ')}\n\n`;
+        });
+      } else if (b.tipo === "response_variations" && b.conteudo.items) {
+        if (b.conteudo.titulo) out += `## ${b.conteudo.titulo}\n\n`;
+        b.conteudo.items.forEach((item: string, idx: number) => {
+          out += `### Resposta ${idx + 1}\n${item}\n\n`;
+        });
       }
     });
     return out.trim();
-
-  } catch (e) {
+  } catch {
     if (format === "html") return `<pre style="white-space: pre-wrap; font-family: sans-serif;">${raw}</pre>`;
-    if (format === "txt") return raw.replace(/\*\*/g, '').replace(/^#+ /gm, '');
-    if (format === "whatsapp") return raw.replace(/\*\*/g, '*').replace(/^#+ /gm, '*');
+    if (format === "txt") return raw.replace(/\*\*/g, "").replace(/^#+ /gm, "");
+    if (format === "whatsapp") return raw.replace(/\*\*/g, "*").replace(/^#+ /gm, "*");
     return raw;
   }
 }
@@ -218,15 +287,27 @@ export default function AuthorityAgentChatPage() {
   const [resultMd, setResultMd] = React.useState<string>("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [isLinkedInModalOpen, setIsLinkedInModalOpen] = React.useState(false);
+  const [isInstagramModalOpen, setIsInstagramModalOpen] = React.useState(false);
+  const [isFacebookModalOpen, setIsFacebookModalOpen] = React.useState(false);
+  const [isYouTubeModalOpen, setIsYouTubeModalOpen] = React.useState(false);
+  const [isTikTokModalOpen, setIsTikTokModalOpen] = React.useState(false);
+  const [facebookPages, setFacebookPages] = React.useState<FacebookPage[]>([]);
+  const [facebookSelectedPageId, setFacebookSelectedPageId] = React.useState("");
+  const [isPublishing, setIsPublishing] = React.useState(false);
+  const [tiktokPrivacyOptions, setTikTokPrivacyOptions] = React.useState<TikTokPrivacyLevel[]>([]);
+  const [tiktokPrivacyLabels, setTikTokPrivacyLabels] = React.useState<Record<string, string>>({});
+  const [tiktokMaxDurationSeconds, setTikTokMaxDurationSeconds] = React.useState<number | undefined>(undefined);
 
   const [anim, setAnim] = React.useState<null | { id: string; label: string; fromX: number; fromY: number }>(null);
 
-  const [suggestingFor, setSuggestingFor] = React.useState<string | null>(null);
+  const [suggestingFor, setSuggestingFor] = React.useState<AuthorityTask | null>(null);
   const [themes, setThemes] = React.useState<string[]>([]);
   const [loadingThemes, setLoadingThemes] = React.useState(false);
   const [customTheme, setCustomTheme] = React.useState("");
   
   const [showDownloadMenu, setShowDownloadMenu] = React.useState(false);
+  const { user } = useAuthStore();
 
   const filled = React.useMemo(() => {
     const keys = Object.keys(nucleus ?? {});
@@ -245,29 +326,36 @@ export default function AuthorityAgentChatPage() {
 
   const coreState = busy || loadingThemes ? "running" : filled > 0.35 ? "ready" : "idle";
 
-  const taskLabels = React.useMemo(() => {
+  const taskItems = React.useMemo<AuthorityTask[]>(() => {
     const tasks = tasksByAgentKey(agentKey);
-    if (tasks.length > 0) return tasks.map((t) => t.title);
-    return ICEBREAKERS_GENERIC;
+    if (tasks.length > 0) return tasks;
+    return ICEBREAKERS_GENERIC.map((title) => ({ title, inputMode: title.toUpperCase().includes("FAQ") || title.toUpperCase().includes("BLOG") ? "theme" : "direct", aiSuggestions: title.toUpperCase().includes("FAQ") || title.toUpperCase().includes("BLOG") }));
   }, [agentKey]);
 
-  const half = React.useMemo(() => Math.ceil(taskLabels.length / 2), [taskLabels.length]);
-  const leftLabels = React.useMemo(() => taskLabels.slice(0, half), [taskLabels, half]);
-  const rightLabels = React.useMemo(() => taskLabels.slice(half), [taskLabels, half]);
+  const half = React.useMemo(() => Math.ceil(taskItems.length / 2), [taskItems.length]);
+  const leftLabels = React.useMemo(() => taskItems.slice(0, half), [taskItems, half]);
+  const rightLabels = React.useMemo(() => taskItems.slice(half), [taskItems, half]);
 
-  async function handleIcebreakerClick(label: string, fromX: number, fromY: number) {
-    const textoBotao = label.toUpperCase();
-    const precisaDeTema = textoBotao.includes("FAQ") || textoBotao.includes("BLOG");
+  async function handleIcebreakerClick(task: AuthorityTask, fromX: number, fromY: number) {
+    const inputMode = task.inputMode || "direct";
+    const precisaDeTema = inputMode === "theme";
+
+    if (inputMode === "textarea") {
+      const texto = window.prompt(task.inputLabel || "Cole aqui a avaliação que você quer responder:", "");
+      if (!texto || !texto.trim()) return;
+      runIcebreaker(task, texto.trim(), fromX, fromY);
+      return;
+    }
 
     if (precisaDeTema) {
-      setSuggestingFor(label);
+      setSuggestingFor(task);
       setLoadingThemes(true);
       setErr(null);
       setCustomTheme("");
       try {
         const res = await api.authorityAgents.suggestThemes({
           agent_key: agent!.key,
-          task: label,
+          task: task.prompt || task.title,
           nucleus: nucleus ?? {}
         });
         setThemes(res.themes);
@@ -278,11 +366,11 @@ export default function AuthorityAgentChatPage() {
         setLoadingThemes(false);
       }
     } else {
-      runIcebreaker(label, label, fromX, fromY);
+      runIcebreaker(task, "", fromX, fromY);
     }
   }
 
-  async function runIcebreaker(taskLabel: string, themeContext: string, fromX: number, fromY: number) {
+  async function runIcebreaker(task: AuthorityTask, themeContext: string, fromX: number, fromY: number) {
     if (!agent) return;
     if (busy) return;
 
@@ -296,7 +384,7 @@ export default function AuthorityAgentChatPage() {
     setBusy(true);
 
     const id = String(Date.now()) + Math.random().toString(16).slice(2);
-    setAnim({ id, label: themeContext, fromX, fromY });
+    setAnim({ id, label: themeContext || task.title, fromX, fromY });
 
     try {
       await new Promise((r) => setTimeout(r, 650));
@@ -306,8 +394,9 @@ export default function AuthorityAgentChatPage() {
         agent_key: agent.key,
         nucleus: { 
           ...(nucleus ?? {}), 
-          requested_task: taskLabel,
-          selected_theme: themeContext
+          requested_task: task.prompt || task.title,
+          ...(themeContext ? { selected_theme: themeContext } : {}),
+          ...(task.inputMode === "textarea" && themeContext ? { review_to_reply: themeContext } : {})
         },
       };
 
@@ -388,10 +477,292 @@ export default function AuthorityAgentChatPage() {
     setShowDownloadMenu(false);
   }
 
+
+  async function handleLinkedInClick() {
+    if (!resultMd) return;
+    if (user?.has_linkedin) {
+      setShowDownloadMenu(false);
+      setIsLinkedInModalOpen(true);
+      return;
+    }
+    try {
+      toastSuccess("Redirecionando para o LinkedIn...");
+      const data = await linkedinService.getAuthUrl();
+      window.location.href = data.url;
+    } catch (err) {
+      toastApiError(err, "Erro ao iniciar conexão com LinkedIn");
+    }
+  }
+
+  async function handlePublishLinkedIn(finalText: string) {
+    setIsPublishing(true);
+    try {
+      await linkedinService.publish(finalText);
+      toastSuccess("Post publicado no seu LinkedIn com sucesso! 🎉");
+      setIsLinkedInModalOpen(false);
+    } catch (err) {
+      toastApiError(err, "Erro ao publicar no LinkedIn");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+  async function handleInstagramClick() {
+    if (!resultMd || isPublishing) return;
+    if (user?.has_instagram) {
+      setShowDownloadMenu(false);
+      setIsInstagramModalOpen(true);
+      return;
+    }
+    try {
+      toastSuccess("Redirecionando para o Instagram...");
+      instagramService.startAuth(window.location.pathname);
+    } catch (err) {
+      toastApiError(err, "Erro ao iniciar conexão com Instagram");
+    }
+  }
+
+  async function handlePublishInstagram(values: InstagramPublishValues) {
+    if (isPublishing) return;
+    setIsPublishing(true);
+    try {
+      const payload = {
+        caption: values.caption,
+        image_url: values.imageUrl || undefined,
+        carousel_images: values.carouselImages || [],
+        collaborators: values.collaborators || [],
+        location_id: values.locationId || undefined,
+        first_comment: values.firstComment || undefined,
+      };
+      const res = await instagramService.publish(payload);
+      toastSuccess(res?.warning ? "Post publicado, mas houve aviso no comentário." : "Post publicado no seu Instagram com sucesso! 🎉");
+      setIsInstagramModalOpen(false);
+    } catch (err) {
+      toastApiError(err, "Erro ao publicar no Instagram");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+  async function loadFacebookStatus() {
+    const status = await facebookService.status();
+    let parsedPages: FacebookPage[] = [];
+    try {
+      parsedPages = JSON.parse(status.pages || "[]");
+    } catch {
+      parsedPages = [];
+    }
+    setFacebookPages(parsedPages);
+    setFacebookSelectedPageId((current) => current || status.page_id || parsedPages[0]?.id || "");
+    return { status, pages: parsedPages };
+  }
+
+  async function handleFacebookClick() {
+    if (!resultMd || isPublishing) return;
+    if (user?.has_facebook) {
+      try {
+        await loadFacebookStatus();
+        setShowDownloadMenu(false);
+        setIsFacebookModalOpen(true);
+        return;
+      } catch (err) {
+        toastApiError(err, "Erro ao carregar páginas do Facebook");
+        return;
+      }
+    }
+    try {
+      toastSuccess("Redirecionando para o Facebook...");
+      facebookService.startAuth(window.location.pathname);
+    } catch (err) {
+      toastApiError(err, "Erro ao iniciar conexão com Facebook");
+    }
+  }
+
+  async function handleSelectFacebookPage(pageId: string) {
+    setFacebookSelectedPageId(pageId);
+    try {
+      await facebookService.selectPage(pageId);
+    } catch (err) {
+      toastApiError(err, "Erro ao trocar a página do Facebook");
+    }
+  }
+
+  async function handlePublishFacebook(values: FacebookPublishValues) {
+    if (isPublishing) return;
+    setIsPublishing(true);
+    try {
+      if (values.selectedPageId && values.selectedPageId !== facebookSelectedPageId) {
+        await facebookService.selectPage(values.selectedPageId);
+        setFacebookSelectedPageId(values.selectedPageId);
+      }
+      const scheduled_publish_time = values.published || !values.scheduledPublishTime ? undefined : Math.floor(new Date(values.scheduledPublishTime).getTime() / 1000);
+      const payload = {
+        message: values.message,
+        link: values.link || undefined,
+        image_url: values.imageUrl || undefined,
+        carousel_images: values.carouselImages || [],
+        published: values.published,
+        scheduled_publish_time,
+        backdated_time: values.backdatedTime ? new Date(values.backdatedTime).toISOString() : undefined,
+        place: values.place || undefined,
+        tags: values.tags || [],
+      };
+      await facebookService.publish(payload);
+      toastSuccess(values.published ? "Post publicado no Facebook com sucesso! 🎉" : "Publicação salva/agendada no Facebook com sucesso!");
+      setIsFacebookModalOpen(false);
+    } catch (err) {
+      toastApiError(err, "Erro ao publicar no Facebook");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+
+  async function handleYouTubeClick() {
+    if (!resultMd || isPublishing) return;
+    if (user?.has_youtube) {
+      setShowDownloadMenu(false);
+      setIsYouTubeModalOpen(true);
+      return;
+    }
+    try {
+      const state = `youtube::${window.location.pathname}::${Date.now()}`;
+      localStorage.setItem("youtube_oauth_state", state);
+      localStorage.setItem("youtube_redirect", window.location.pathname);
+      toastSuccess("Redirecionando para o YouTube...");
+      const data = await youtubeService.getAuthUrl(state);
+      window.location.href = data.url;
+    } catch (err) {
+      toastApiError(err, "Erro ao iniciar conexão com YouTube");
+    }
+  }
+
+  async function handlePublishYouTube(values: YouTubePublishValues) {
+    if (isPublishing || !values.videoFile) return;
+    setIsPublishing(true);
+    try {
+      const res = await youtubeService.publish({
+        description: values.description,
+        privacy_status: values.privacyStatus,
+        made_for_kids: values.madeForKids,
+        tags: values.tags,
+        category_id: values.categoryId,
+        video_file: values.videoFile,
+        thumbnail_file: values.thumbnailFile,
+      });
+      toastSuccess(res.thumbnail_warning ? "Vídeo enviado ao YouTube. A thumbnail não foi aplicada." : "Vídeo publicado no YouTube com sucesso! 🎉");
+      setIsYouTubeModalOpen(false);
+    } catch (err) {
+      toastApiError(err, "Erro ao publicar no YouTube");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+  async function handleTikTokClick() {
+    if (!resultMd || isPublishing) return;
+    if (user?.has_tiktok) {
+      try {
+        const status = await tiktokService.status();
+        setTikTokPrivacyOptions(status.privacy_level_options ?? []);
+        setTikTokPrivacyLabels(status.privacy_level_labels ?? {});
+        setTikTokMaxDurationSeconds(status.max_video_post_duration_sec);
+        setShowDownloadMenu(false);
+        setIsTikTokModalOpen(true);
+        return;
+      } catch (err) {
+        toastApiError(err, "Erro ao carregar status do TikTok");
+        return;
+      }
+    }
+    try {
+      const state = `tiktok::${window.location.pathname}::${Date.now()}`;
+      localStorage.setItem("tiktok_oauth_state", state);
+      localStorage.setItem("tiktok_redirect", window.location.pathname);
+      toastSuccess("Redirecionando para o TikTok...");
+      const data = await tiktokService.getAuthUrl(state);
+      window.location.href = data.url;
+    } catch (err) {
+      toastApiError(err, "Erro ao iniciar conexão com TikTok");
+    }
+  }
+
+  async function handlePublishTikTok(values: TikTokPublishValues) {
+    if (isPublishing || !values.videoFile) return;
+    setIsPublishing(true);
+    try {
+      await tiktokService.publish({
+        privacy_level: values.privacyLevel,
+        disable_duet: values.disableDuet,
+        disable_comment: values.disableComment,
+        disable_stitch: values.disableStitch,
+        brand_content_toggle: values.brandContentToggle,
+        brand_organic_toggle: values.brandOrganicToggle,
+        is_aigc: values.isAigc,
+        caption: values.caption,
+        video_cover_timestamp_ms: values.videoCoverTimestampMs,
+        video_file: values.videoFile,
+      });
+      toastSuccess("Vídeo publicado no TikTok com sucesso! 🎉");
+      setIsTikTokModalOpen(false);
+    } catch (err) {
+      toastApiError(err, "Erro ao publicar no TikTok");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
   if (!agent) return null;
 
   return (
     <div className="relative min-h-[calc(100dvh-1px)]">
+      <PublishModal
+        isOpen={isLinkedInModalOpen}
+        onClose={() => setIsLinkedInModalOpen(false)}
+        initialText={exportFormat(resultMd || "", "txt")}
+        onPublish={handlePublishLinkedIn}
+        loading={isPublishing}
+      />
+
+      <InstagramPublishModal
+        isOpen={isInstagramModalOpen}
+        onClose={() => setIsInstagramModalOpen(false)}
+        initialCaption={exportFormat(resultMd || "", "txt")}
+        onPublish={handlePublishInstagram}
+        loading={isPublishing}
+      />
+
+      <FacebookPublishModal
+        isOpen={isFacebookModalOpen}
+        onClose={() => setIsFacebookModalOpen(false)}
+        initialText={exportFormat(resultMd || "", "txt")}
+        onPublish={handlePublishFacebook}
+        onSelectPage={handleSelectFacebookPage}
+        loading={isPublishing}
+        pages={facebookPages}
+        selectedPageId={facebookSelectedPageId}
+      />
+
+      <YouTubePublishModal
+        isOpen={isYouTubeModalOpen}
+        onClose={() => setIsYouTubeModalOpen(false)}
+        initialTitle={agent?.name ? `${agent.name} | ${new Date().toLocaleDateString()}` : "Novo vídeo"}
+        initialDescription={exportFormat(resultMd || "", "txt")}
+        onPublish={handlePublishYouTube}
+        loading={isPublishing}
+      />
+
+      <TikTokPublishModal
+        isOpen={isTikTokModalOpen}
+        onClose={() => setIsTikTokModalOpen(false)}
+        initialCaption={exportFormat(resultMd || "", "txt")}
+        onPublish={handlePublishTikTok}
+        loading={isPublishing}
+        privacyOptions={tiktokPrivacyOptions}
+        privacyLabels={tiktokPrivacyLabels}
+        maxDurationSeconds={tiktokMaxDurationSeconds}
+      />
+
       <Particles className="pointer-events-none absolute inset-0 opacity-35" />
 
       <div className="relative mx-auto max-w-6xl px-4 py-6">
@@ -461,14 +832,14 @@ export default function AuthorityAgentChatPage() {
                 <div className="grid h-full w-full grid-cols-[1fr_auto_1fr] gap-6 p-6">
                   {/* coluna esquerda */}
                   <div className="flex min-w-0 flex-col items-end gap-3 overflow-y-auto pr-1">
-                    {leftLabels.map((label) => (
+                    {leftLabels.map((task) => (
                       <button
-                        key={`l-${label}`}
+                        key={`l-${task.title}`}
                         type="button"
                         disabled={busy || loadingThemes}
                         onClick={(e) => {
                           const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                          handleIcebreakerClick(label, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                          handleIcebreakerClick(task, rect.left + rect.width / 2, rect.top + rect.height / 2);
                         }}
                         className={cn(
                           "w-full max-w-[260px] rounded-2xl border bg-background/60 px-3 py-2 text-left text-xs shadow-soft",
@@ -479,7 +850,7 @@ export default function AuthorityAgentChatPage() {
                       >
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-muted-foreground" />
-                          <span className="line-clamp-2">{label}</span>
+                          <span className="line-clamp-2">{task.title}</span>
                         </div>
                       </button>
                     ))}
@@ -517,15 +888,15 @@ export default function AuthorityAgentChatPage() {
                               </div>
                             ) : (
                               <div className="flex flex-col gap-4 w-full max-w-sm">
-                                <div className="text-center font-semibold text-lg">Qual o foco do {suggestingFor}?</div>
+                                <div className="text-center font-semibold text-lg">Qual o foco do {suggestingFor?.title}?</div>
                                 <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto pr-1">
                                   {themes.map((t, idx) => (
-                                    <Button key={idx} variant="secondary" className="justify-start text-left h-auto py-3 whitespace-normal" onClick={() => runIcebreaker(suggestingFor, t, window.innerWidth/2, window.innerHeight/2)}>
+                                    <Button key={idx} variant="secondary" className="justify-start text-left h-auto py-3 whitespace-normal" onClick={() => suggestingFor && runIcebreaker(suggestingFor, t, window.innerWidth/2, window.innerHeight/2)}>
                                       <Sparkles className="h-4 w-4 mr-2 flex-shrink-0 text-google-blue" />
                                       <span>{t}</span>
                                     </Button>
                                   ))}
-                                  <Button variant="secondary" className="justify-start text-left py-3" onClick={() => runIcebreaker(suggestingFor, "Surpreenda-me", window.innerWidth/2, window.innerHeight/2)}>
+                                  <Button variant="secondary" className="justify-start text-left py-3" onClick={() => suggestingFor && runIcebreaker(suggestingFor, "Surpreenda-me", window.innerWidth/2, window.innerHeight/2)}>
                                     <Sparkles className="h-4 w-4 mr-2 flex-shrink-0 text-google-yellow" /> 
                                     <span>Surpreenda-me (Tema Geral)</span>
                                   </Button>
@@ -537,7 +908,7 @@ export default function AuthorityAgentChatPage() {
                                     onChange={(e) => setCustomTheme(e.target.value)} 
                                     className="bg-background"
                                   />
-                                  <Button size="icon" disabled={!customTheme.trim()} onClick={() => customTheme.trim() && runIcebreaker(suggestingFor, customTheme, window.innerWidth/2, window.innerHeight/2)}>
+                                  <Button size="icon" disabled={!customTheme.trim()} onClick={() => customTheme.trim() && suggestingFor && runIcebreaker(suggestingFor, customTheme, window.innerWidth/2, window.innerHeight/2)}>
                                     <ArrowLeft className="h-4 w-4 rotate-180" />
                                   </Button>
                                 </div>
@@ -552,14 +923,14 @@ export default function AuthorityAgentChatPage() {
 
                   {/* coluna direita */}
                   <div className="flex min-w-0 flex-col items-start gap-3 overflow-y-auto pl-1">
-                    {rightLabels.map((label) => (
+                    {rightLabels.map((task) => (
                       <button
-                        key={`r-${label}`}
+                        key={`r-${task.title}`}
                         type="button"
                         disabled={busy || loadingThemes}
                         onClick={(e) => {
                           const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                          handleIcebreakerClick(label, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                          handleIcebreakerClick(task, rect.left + rect.width / 2, rect.top + rect.height / 2);
                         }}
                         className={cn(
                           "w-full max-w-[260px] rounded-2xl border bg-background/60 px-3 py-2 text-left text-xs shadow-soft",
@@ -570,7 +941,7 @@ export default function AuthorityAgentChatPage() {
                       >
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-muted-foreground" />
-                          <span className="line-clamp-2">{label}</span>
+                          <span className="line-clamp-2">{task.title}</span>
                         </div>
                       </button>
                     ))}
@@ -671,6 +1042,31 @@ export default function AuthorityAgentChatPage() {
                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
                     </svg>
                     Encaminhar
+                  </Button>
+
+
+                  <Button size="sm" className="bg-[#0A66C2] text-white shadow-sm rounded-xl hover:bg-[#004182] h-9 px-4" onClick={handleLinkedInClick}>
+                    <Linkedin className="h-4 w-4 mr-2" />
+                    LinkedIn
+                  </Button>
+
+                  <Button size="sm" className="bg-gradient-to-r from-pink-500 via-fuchsia-500 to-orange-400 text-white shadow-sm rounded-xl hover:opacity-95 border-none h-9 px-4" onClick={handleInstagramClick}>
+                    <Instagram className="h-4 w-4 mr-2" />
+                    Instagram
+                  </Button>
+
+                  <Button size="sm" className="bg-[#1877F2] text-white shadow-sm rounded-xl hover:bg-[#1664d9] border-none h-9 px-4" onClick={handleFacebookClick}>
+                    <Facebook className="h-4 w-4 mr-2" />
+                    Facebook
+                  </Button>
+                  <Button size="sm" className="bg-[#FF0033] text-white shadow-sm rounded-xl hover:bg-[#e0002d] border-none h-9 px-4" onClick={handleYouTubeClick}>
+                    <Youtube className="h-4 w-4 mr-2" />
+                    YouTube
+                  </Button>
+
+                  <Button size="sm" className="bg-black text-white shadow-sm rounded-xl hover:bg-neutral-800 border-none h-9 px-4" onClick={handleTikTokClick}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    TikTok
                   </Button>
                 </div>
               </div>

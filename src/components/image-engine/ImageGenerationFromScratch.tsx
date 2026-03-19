@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { ArrowLeft } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -10,6 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { appendImageHistory } from "@/lib/imageHistory";
+import { API_BASE_URL } from "@/constants/app";
 import {
   Wand2,
   Sparkles,
@@ -21,12 +24,6 @@ import {
   Palette,
   Image as ImageIcon,
   Loader2,
-  Instagram,
-  Facebook,
-  Linkedin,
-  Youtube,
-  Globe,
-  MessageCircle,
   Check,
   LayoutTemplate,
   Rocket,
@@ -55,14 +52,6 @@ type PaletteOption = {
   colors: string[];
 };
 
-type DestinationOption = {
-  value: string;
-  label: string;
-  hint: string;
-  icon: React.ReactNode;
-  recommendedFormat: string;
-  recommendedQuality: string;
-};
 
 const FORMAT_OPTIONS: FormatOption[] = [
   {
@@ -85,72 +74,6 @@ const FORMAT_OPTIONS: FormatOption[] = [
   },
 ];
 
-const DESTINATION_OPTIONS: DestinationOption[] = [
-  {
-    value: "Instagram Feed",
-    label: "Instagram Feed",
-    hint: "Post estático de alta atenção.",
-    icon: <Instagram className="w-5 h-5" />,
-    recommendedFormat: "quadrado_1_1",
-    recommendedQuality: "media",
-  },
-  {
-    value: "Instagram Stories",
-    label: "Instagram Stories",
-    hint: "Tela cheia com apelo rápido.",
-    icon: <Instagram className="w-5 h-5" />,
-    recommendedFormat: "vertical_9_16",
-    recommendedQuality: "media",
-  },
-  {
-    value: "Instagram Reels",
-    label: "Instagram Reels",
-    hint: "Capa e criativo vertical.",
-    icon: <Instagram className="w-5 h-5" />,
-    recommendedFormat: "vertical_9_16",
-    recommendedQuality: "media",
-  },
-  {
-    value: "Facebook Feed",
-    label: "Facebook Feed",
-    hint: "Criativo para campanhas e posts.",
-    icon: <Facebook className="w-5 h-5" />,
-    recommendedFormat: "quadrado_1_1",
-    recommendedQuality: "media",
-  },
-  {
-    value: "LinkedIn Post",
-    label: "LinkedIn Post",
-    hint: "Peças mais limpas e profissionais.",
-    icon: <Linkedin className="w-5 h-5" />,
-    recommendedFormat: "quadrado_1_1",
-    recommendedQuality: "media",
-  },
-  {
-    value: "YouTube Thumbnail",
-    label: "YouTube Thumbnail",
-    hint: "Máximo destaque e leitura rápida.",
-    icon: <Youtube className="w-5 h-5" />,
-    recommendedFormat: "horizontal_16_9",
-    recommendedQuality: "alta",
-  },
-  {
-    value: "WhatsApp Status",
-    label: "WhatsApp Status",
-    hint: "Visual direto e vertical.",
-    icon: <MessageCircle className="w-5 h-5" />,
-    recommendedFormat: "vertical_9_16",
-    recommendedQuality: "media",
-  },
-  {
-    value: "Landing Page / Site",
-    label: "Landing Page / Site",
-    hint: "Hero banners e áreas principais.",
-    icon: <Globe className="w-5 h-5" />,
-    recommendedFormat: "horizontal_16_9",
-    recommendedQuality: "alta",
-  },
-];
 
 const PALETTE_OPTIONS: PaletteOption[] = [
   { value: "google", label: "Google Tech", colors: ["#4285F4", "#EA4335", "#FBBC05", "#34A853"] },
@@ -181,15 +104,6 @@ const QUALITY_OPTIONS = [
   },
 ];
 
-function getRecommendedQuality(destination: string): string {
-  const found = DESTINATION_OPTIONS.find((item) => item.value === destination);
-  return found?.recommendedQuality || "media";
-}
-
-function getRecommendedFormat(destination: string): string {
-  const found = DESTINATION_OPTIONS.find((item) => item.value === destination);
-  return found?.recommendedFormat || "quadrado_1_1";
-}
 
 function getAspectClass(formato: string) {
   if (formato === "vertical_9_16") return "aspect-[9/16]";
@@ -197,19 +111,32 @@ function getAspectClass(formato: string) {
   return "aspect-square";
 }
 
+function getPreviewAspectRatio(formato: string, width?: number | null, height?: number | null) {
+  if (width && height) return `${width} / ${height}`;
+  if (formato === "vertical_9_16") return "9 / 16";
+  if (formato === "horizontal_16_9") return "16 / 9";
+  return "1 / 1";
+}
+
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-export default function ImageGenerationFromScratch() {
+type Props = {
+  onBack?: () => void;
+};
+
+export default function ImageGenerationFromScratch({ onBack }: Props) {
   const [formato, setFormato] = useState<string>("quadrado_1_1");
   const [qualidade, setQualidade] = useState<string>("media");
-  const [ondePostar, setOndePostar] = useState<string>("Instagram Feed");
   const [paletaSelecionada, setPaletaSelecionada] = useState<string>("google");
   const [paletaCustom, setPaletaCustom] = useState<string>("");
   const [headline, setHeadline] = useState<string>("");
   const [subheadline, setSubheadline] = useState<string>("");
   const [descricaoVisual, setDescricaoVisual] = useState<string>("");
+  const [resolutionMode, setResolutionMode] = useState<"preset" | "custom">("preset");
+  const [customWidth, setCustomWidth] = useState<string>("1024");
+  const [customHeight, setCustomHeight] = useState<string>("1280");
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusText, setStatusText] = useState("");
@@ -218,13 +145,6 @@ export default function ImageGenerationFromScratch() {
   const [improvedPrompt, setImprovedPrompt] = useState("");
   const [finalPrompt, setFinalPrompt] = useState("");
 
-  const recommendedQuality = useMemo(() => getRecommendedQuality(ondePostar), [ondePostar]);
-  const recommendedFormat = useMemo(() => getRecommendedFormat(ondePostar), [ondePostar]);
-
-  const currentDestination = useMemo(
-    () => DESTINATION_OPTIONS.find((item) => item.value === ondePostar),
-    [ondePostar]
-  );
 
   const currentFormat = useMemo(
     () => FORMAT_OPTIONS.find((item) => item.value === formato),
@@ -247,9 +167,26 @@ export default function ImageGenerationFromScratch() {
     [paletaSelecionada]
   );
 
+  const parsedCustomWidth = useMemo(() => Number(customWidth), [customWidth]);
+  const parsedCustomHeight = useMemo(() => Number(customHeight), [customHeight]);
+  const hasValidCustomDimensions =
+    Number.isInteger(parsedCustomWidth) &&
+    Number.isInteger(parsedCustomHeight) &&
+    parsedCustomWidth >= 256 &&
+    parsedCustomWidth <= 4096 &&
+    parsedCustomHeight >= 256 &&
+    parsedCustomHeight <= 4096;
+  const previewAspectRatio = getPreviewAspectRatio(
+    formato,
+    resolutionMode === "custom" && hasValidCustomDimensions ? parsedCustomWidth : undefined,
+    resolutionMode === "custom" && hasValidCustomDimensions ? parsedCustomHeight : undefined
+  );
+
   const handleApplyRecommendations = () => {
-    setFormato(recommendedFormat);
-    setQualidade(recommendedQuality);
+    if (resolutionMode === "preset") {
+      setFormato("quadrado_1_1");
+    }
+    setQualidade("media");
   };
 
   const handleGenerate = async () => {
@@ -260,6 +197,11 @@ export default function ImageGenerationFromScratch() {
 
     if (paletaSelecionada === "custom" && !paletaCustom.trim()) {
       setStatusText("⚠ Descreva sua paleta personalizada.");
+      return;
+    }
+
+    if (resolutionMode === "custom" && !hasValidCustomDimensions) {
+      setStatusText("⚠ Informe width e height válidos entre 256 e 4096 pixels.");
       return;
     }
 
@@ -279,7 +221,7 @@ export default function ImageGenerationFromScratch() {
     })();
 
     try {
-      const response = await fetch("http://localhost:8000/api/image-engine/stream", {
+      const response = await fetch(`${API_BASE_URL}/api/image-engine/stream`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -289,11 +231,12 @@ export default function ImageGenerationFromScratch() {
         body: JSON.stringify({
           formato,
           qualidade,
-          onde_postar: ondePostar,
           paleta_cores: paletteValue,
           headline,
           subheadline,
           descricao_visual: descricaoVisual,
+          width: resolutionMode === "custom" ? parsedCustomWidth : null,
+          height: resolutionMode === "custom" ? parsedCustomHeight : null,
         }),
       });
 
@@ -337,6 +280,20 @@ export default function ImageGenerationFromScratch() {
 
             if (Array.isArray(data.final_results)) {
               setResults(data.final_results);
+              appendImageHistory(
+                data.final_results.map((item: ImageResult) => ({
+                  type: "generated",
+                  url: item.url,
+                  motor: item.motor,
+                  engine_id: item.engine_id,
+                  format: formato,
+                  quality: qualidade,
+                  width: resolutionMode === "custom" ? parsedCustomWidth : undefined,
+                  height: resolutionMode === "custom" ? parsedCustomHeight : undefined,
+                  prompt: finalPrompt || descricaoVisual,
+                  improvedPrompt,
+                }))
+              );
               setIsGenerating(false);
             }
           } catch (e) {
@@ -357,6 +314,18 @@ export default function ImageGenerationFromScratch() {
       <div className="mb-8">
         <div className="rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.96)_0%,rgba(2,6,23,0.98)_60%,rgba(7,12,22,1)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)] overflow-hidden">
           <div className="p-6 md:p-8 flex flex-col gap-6">
+            {onBack && (
+              <div>
+                <Button
+                  variant="ghost"
+                  className="gap-2 px-0 text-slate-300 hover:text-white hover:bg-transparent"
+                  onClick={onBack}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Voltar
+                </Button>
+              </div>
+            )}
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300">
@@ -369,28 +338,25 @@ export default function ImageGenerationFromScratch() {
                     Motor de Imagem
                   </h1>
                   <p className="text-base md:text-lg text-slate-300 max-w-3xl">
-                    Monte o briefing da peça promocional, aplique padrões ideais por canal e gere
+                    Monte o briefing da peça promocional, ajuste a direção visual e gere
                     múltiplas opções com prompts otimizados automaticamente.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-full lg:min-w-[420px]">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 min-w-full lg:min-w-[560px]">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">
-                    Destino
+                    Estratégia
                   </div>
-                  <div className="flex items-center gap-2 font-semibold text-white">
-                    {currentDestination?.icon}
-                    <span>{ondePostar}</span>
-                  </div>
+                  <div className="font-semibold text-white">Livre</div>
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">
                     Formato
                   </div>
-                  <div className="font-semibold text-white">{currentFormat?.label}</div>
+                  <div className="font-semibold text-white">{resolutionMode === "custom" ? "Automático pelo tamanho" : currentFormat?.label}</div>
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-4">
@@ -398,6 +364,17 @@ export default function ImageGenerationFromScratch() {
                     Qualidade
                   </div>
                   <div className="font-semibold text-white">{currentQuality?.label}</div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">
+                    Tamanho final
+                  </div>
+                  <div className="font-semibold text-white">
+                    {resolutionMode === "custom" && hasValidCustomDimensions
+                      ? `${parsedCustomWidth}x${parsedCustomHeight}`
+                      : "Padrão"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -410,14 +387,7 @@ export default function ImageGenerationFromScratch() {
                 </div>
 
                 <div className="text-slate-300">
-                  Para <span className="font-medium text-white">{ondePostar}</span>, o ideal é{" "}
-                  <span className="font-medium text-white">
-                    {FORMAT_OPTIONS.find((f) => f.value === recommendedFormat)?.label}
-                  </span>{" "}
-                  e{" "}
-                  <span className="font-medium text-white">
-                    {QUALITY_OPTIONS.find((q) => q.value === recommendedQuality)?.label}
-                  </span>.
+                  O sistema aplica uma configuração base equilibrada para geração comercial. Você pode ajustar formato, qualidade e tamanho final livremente.
                 </div>
               </div>
 
@@ -445,88 +415,58 @@ export default function ImageGenerationFromScratch() {
             <CardHeader className="pb-4">
               <CardTitle className="text-xl md:text-2xl font-semibold tracking-tight flex items-center gap-2 text-white">
                 <Rocket className="w-5 h-5 text-blue-400" />
-                1. Canal e configuração da mídia
+                1. Configuração da mídia
               </CardTitle>
               <CardDescription className="text-slate-400">
-                Escolha onde a peça será publicada para direcionar melhor formato, impacto visual e leitura.
+                Defina formato, qualidade e tamanho final da peça sem depender de canal de publicação.
               </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-8">
-              <div className="space-y-3">
-                <label className="text-sm font-semibold text-white">Onde vai ser postado?</label>
-
-                <div className="flex flex-wrap gap-3">
-                  {DESTINATION_OPTIONS.map((option) => {
-                    const isSelected = ondePostar === option.value;
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={isGenerating}
-                        onClick={() => setOndePostar(option.value)}
-                        className={cn(
-                          "flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all duration-200",
-                          isSelected
-                            ? "border-blue-500 bg-blue-500/15 text-blue-200 shadow-[0_0_0_1px_rgba(59,130,246,0.2)]"
-                            : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-blue-400/30 hover:bg-white/[0.05]"
-                        )}
-                      >
-                        <div className={cn("shrink-0", isSelected ? "text-blue-400" : "text-slate-400")}>
-                          {option.icon}
-                        </div>
-                        {option.label}
-                        {isSelected && (
-                          <Check className="w-3.5 h-3.5 ml-1 text-blue-400 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 gap-8">
                 <div className="space-y-3">
                   <label className="text-sm font-semibold flex items-center justify-between text-white">
                     Formato de saída
                     <span className="text-xs font-normal text-slate-400">
-                      Recomendado: {FORMAT_OPTIONS.find((f) => f.value === recommendedFormat)?.label}
+                      {resolutionMode === "custom"
+                        ? "Automático pelo width e height"
+                        : "Selecione o formato que melhor atende a peça"}
                     </span>
                   </label>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {FORMAT_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={isGenerating}
-                        onClick={() => setFormato(option.value)}
-                        className={cn(
-                          "relative flex flex-col items-center justify-center p-4 rounded-2xl border transition-all duration-200",
-                          formato === option.value
-                            ? "border-blue-500 bg-blue-500/10 shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
-                            : "border-white/10 bg-white/[0.03] hover:border-blue-400/30"
-                        )}
-                      >
-                        <div
+                    {FORMAT_OPTIONS.map((option) => {
+                      const isSelected = resolutionMode === "preset" && formato === option.value;
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={isGenerating}
+                          onClick={() => {
+                            setResolutionMode("preset");
+                            setFormato(option.value);
+                          }}
                           className={cn(
-                            "mb-2",
-                            formato === option.value ? "text-blue-300" : "text-slate-400"
+                            "relative flex flex-col items-center justify-center p-4 rounded-2xl border transition-all duration-200",
+                            isSelected
+                              ? "border-blue-500 bg-blue-500/10 shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
+                              : "border-white/10 bg-white/[0.03] hover:border-blue-400/30"
                           )}
                         >
-                          {option.icon}
-                        </div>
-                        <span className="font-medium text-sm text-white">{option.label}</span>
-                        <span className="text-xs text-slate-400 mt-1 text-center">{option.hint}</span>
-
-                        {recommendedFormat === option.value && (
-                          <div className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm">
-                            IDEAL
+                          <div
+                            className={cn(
+                              "mb-2",
+                              isSelected ? "text-blue-300" : "text-slate-400"
+                            )}
+                          >
+                            {option.icon}
                           </div>
-                        )}
-                      </button>
-                    ))}
+                          <span className="font-medium text-sm text-white">{option.label}</span>
+                          <span className="text-xs text-slate-400 mt-1 text-center">{option.hint}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -534,7 +474,7 @@ export default function ImageGenerationFromScratch() {
                   <label className="text-sm font-semibold flex items-center justify-between text-white">
                     Qualidade da renderização
                     <span className="text-xs font-normal text-slate-400">
-                      Recomendado: {QUALITY_OPTIONS.find((q) => q.value === recommendedQuality)?.label}
+                      Escolha o nível de detalhe desejado
                     </span>
                   </label>
 
@@ -564,15 +504,87 @@ export default function ImageGenerationFromScratch() {
                           <span className="block font-medium text-sm text-white">{option.label}</span>
                           <span className="block text-xs text-slate-400 mt-0.5">{option.hint}</span>
                         </div>
-
-                        {recommendedQuality === option.value && (
-                          <div className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm">
-                            IDEAL
-                          </div>
-                        )}
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <label className="text-sm font-semibold text-white">Tamanho final</label>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Você pode manter o canvas padrão do motor ou pedir width e height exatos.
+                      </p>
+                    </div>
+                    <div className="inline-flex rounded-xl border border-white/10 bg-black/20 p-1">
+                      <button
+                        type="button"
+                        disabled={isGenerating}
+                        onClick={() => setResolutionMode("preset")}
+                        className={cn(
+                          "rounded-lg px-3 py-2 text-sm transition-colors",
+                          resolutionMode === "preset" ? "bg-blue-600 text-white" : "text-slate-300 hover:text-white"
+                        )}
+                      >
+                        Padrão do formato
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isGenerating}
+                        onClick={() => setResolutionMode("custom")}
+                        className={cn(
+                          "rounded-lg px-3 py-2 text-sm transition-colors",
+                          resolutionMode === "custom" ? "bg-blue-600 text-white" : "text-slate-300 hover:text-white"
+                        )}
+                      >
+                        Customizado
+                      </button>
+                    </div>
+                  </div>
+
+                  {resolutionMode === "custom" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2 rounded-xl border border-blue-400/15 bg-blue-500/10 p-3 text-sm text-blue-100">
+                        Ao usar tamanho customizado, o formato deixa de ser fixo. O preview e o resultado passam a seguir o width e o height informados.
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-white">Width</label>
+                        <Input
+                          type="number"
+                          min={256}
+                          max={4096}
+                          step={1}
+                          value={customWidth}
+                          onChange={(e) => setCustomWidth(e.target.value)}
+                          disabled={isGenerating}
+                          className="h-11 border-white/10 bg-white/[0.03] text-white placeholder:text-slate-500"
+                          placeholder="Ex: 1024"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-white">Height</label>
+                        <Input
+                          type="number"
+                          min={256}
+                          max={4096}
+                          step={1}
+                          value={customHeight}
+                          onChange={(e) => setCustomHeight(e.target.value)}
+                          disabled={isGenerating}
+                          className="h-11 border-white/10 bg-white/[0.03] text-white placeholder:text-slate-500"
+                          placeholder="Ex: 1280"
+                        />
+                      </div>
+                      <div className="md:col-span-2 rounded-xl border border-amber-400/15 bg-amber-500/10 p-3 text-sm text-amber-100">
+                        O motor gera no canvas suportado mais próximo e depois faz o pós-processamento para entregar exatamente o tamanho informado.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-300">
+                      O sistema vai usar o canvas padrão ideal para o formato selecionado.
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -739,16 +751,16 @@ export default function ImageGenerationFromScratch() {
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                       <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">
-                        Canal
+                        Estratégia
                       </div>
-                      <div className="text-sm font-medium text-white">{ondePostar}</div>
+                      <div className="text-sm font-medium text-white">Livre</div>
                     </div>
 
                     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                       <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">
                         Formato
                       </div>
-                      <div className="text-sm font-medium text-white">{currentFormat?.label}</div>
+                      <div className="text-sm font-medium text-white">{resolutionMode === "custom" ? "Automático pelo tamanho" : currentFormat?.label}</div>
                     </div>
 
                     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -809,7 +821,10 @@ export default function ImageGenerationFromScratch() {
                       className="group overflow-hidden border-white/10 bg-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.22)] hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] transition-all rounded-2xl"
                     >
                       <div className="relative h-full">
-                        <div className={cn("relative overflow-hidden w-full", getAspectClass(formato))}>
+                        <div
+                          className={cn("relative overflow-hidden w-full", resolutionMode === "custom" ? undefined : getAspectClass(formato))}
+                          style={{ aspectRatio: previewAspectRatio }}
+                        >
                           <img
                             src={result.url}
                             alt={result.motor}
@@ -859,8 +874,9 @@ export default function ImageGenerationFromScratch() {
                       <div
                         className={cn(
                           "bg-slate-800 animate-pulse w-full",
-                          getAspectClass(formato)
+                          resolutionMode === "custom" ? undefined : getAspectClass(formato)
                         )}
+                        style={{ aspectRatio: previewAspectRatio }}
                       />
                     </Card>
                   ))}
@@ -874,7 +890,7 @@ export default function ImageGenerationFromScratch() {
 
                 <h3 className="font-semibold text-lg mb-2 text-white">Nenhuma imagem gerada ainda</h3>
                 <p className="text-sm text-slate-400 max-w-[320px] leading-relaxed">
-                  Preencha o briefing, selecione o canal ideal e clique em <span className="font-medium text-white">Gerar criativos</span> para visualizar as variações logo abaixo.
+                  Preencha o briefing, ajuste formato, qualidade e tamanho final, e clique em <span className="font-medium text-white">Gerar criativos</span> para visualizar as variações logo abaixo.
                 </p>
               </div>
             )}

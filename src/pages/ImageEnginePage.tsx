@@ -1,21 +1,26 @@
 import { useState } from "react";
-import { ArrowRight, ImagePlus, Layers3, Wand2 } from "lucide-react";
+import { ArrowRight, Clock3, ImagePlus, Layers3, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import ImageGenerationFromScratch from "@/components/image-engine/ImageGenerationFromScratch";
 import ImageEditReferenceView from "@/components/image-engine/ImageEditReferenceView";
+import ImageHistoryView from "@/components/image-engine/ImageHistoryView";
 
-type Mode = "select" | "generate" | "edit";
+type Mode = "select" | "generate" | "edit" | "history";
 
 export default function ImageEnginePage() {
   const [mode, setMode] = useState<Mode>("select");
 
   if (mode === "generate") {
-    return <ImageGenerationFromScratch />;
+    return <ImageGenerationFromScratch onBack={() => setMode("select")} />;
   }
 
   if (mode === "edit") {
     return <ImageEditReferenceView onBack={() => setMode("select")} />;
+  }
+
+  if (mode === "history") {
+    return <ImageHistoryView onBack={() => setMode("select")} />;
   }
 
   return (
@@ -33,7 +38,7 @@ export default function ImageEnginePage() {
                 Motor de Imagem
               </h1>
               <p className="text-base md:text-lg text-slate-300">
-                Escolha como você quer trabalhar com a IA. Você pode criar um criativo do zero ou editar uma imagem já existente a partir de uma referência.
+                Escolha como você quer trabalhar com a IA. Você pode criar um criativo do zero, editar uma imagem já existente a partir de uma referência ou revisar todo o histórico das peças produzidas.
               </p>
             </div>
           </div>
@@ -53,7 +58,7 @@ export default function ImageEnginePage() {
                   </div>
 
                   <p className="text-slate-300 leading-relaxed">
-                    Use o fluxo atual já pronto para montar briefing, definir canal, ajustar paleta e gerar múltiplas variações com prompts otimizados automaticamente.
+                    Use o fluxo atual já pronto para montar briefing, ajustar paleta, definir formato e gerar múltiplas variações com prompts otimizados automaticamente.
                   </p>
 
                   <div className="space-y-2 text-sm text-slate-400">
@@ -109,6 +114,18 @@ export default function ImageEnginePage() {
                 </Button>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="flex justify-center">
+            <Button
+              size="lg"
+              variant="outline"
+              className="min-w-[260px] rounded-2xl h-12 px-8 border-white/10 bg-white/[0.04] text-slate-100 hover:bg-white/[0.08]"
+              onClick={() => setMode("history")}
+            >
+              <Clock3 className="w-4 h-4 mr-2" />
+              Histórico
+            </Button>
           </div>
         </div>
       </div>

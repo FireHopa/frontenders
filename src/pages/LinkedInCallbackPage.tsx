@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { linkedinService } from "@/services/linkedin";
 import { useAuthStore } from "@/state/authStore";
+import { authService } from "@/services/auth";
 import { toastSuccess, toastApiError } from "@/lib/toast";
 
 export default function LinkedInCallbackPage() {
@@ -32,8 +33,28 @@ export default function LinkedInCallbackPage() {
       hasCalledAPI.current = true;
 
       linkedinService.connect(code)
-        .then(() => {
-          updateUser({ has_linkedin: true });
+        .then(async () => {
+          const me = await authService.checkMe();
+          updateUser({
+            email: me.email,
+            name: me.full_name,
+            credits: me.credits,
+            has_linkedin: me.has_linkedin,
+            has_instagram: me.has_instagram,
+            instagram_username: me.instagram_username,
+            has_facebook: me.has_facebook,
+            facebook_page_name: me.facebook_page_name,
+            facebook_page_username: me.facebook_page_username,
+            has_youtube: me.has_youtube,
+            youtube_channel_title: me.youtube_channel_title,
+            youtube_channel_handle: me.youtube_channel_handle,
+            has_tiktok: me.has_tiktok,
+            tiktok_display_name: me.tiktok_display_name,
+            tiktok_username: me.tiktok_username,
+            has_google_business_profile: me.has_google_business_profile,
+            google_business_account_display_name: me.google_business_account_display_name,
+            google_business_location_title: me.google_business_location_title,
+          });
           toastSuccess("Conta do LinkedIn conectada com sucesso!");
           localStorage.removeItem("linkedin_redirect");
           navigate(redirectPath);

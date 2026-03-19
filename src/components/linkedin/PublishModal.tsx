@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Loader2, Linkedin, Globe2, ThumbsUp, MessageSquare, Repeat2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/state/authStore";
@@ -15,25 +16,24 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
   const [text, setText] = useState("");
   const { user } = useAuthStore();
 
-  // Atualiza o texto sempre que o modal abrir com um texto novo
   useEffect(() => {
     if (isOpen) setText(initialText);
   }, [isOpen, initialText]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
-  // Pega as iniciais e o nome do usuário logado para simular o post
   const initials = user?.name ? user.name.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase() || "U";
   const displayName = user?.name || "Usuário do LinkedIn";
 
-  return (
-    // z-[9999] garante que fique por cima de absolutamente tudo
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 sm:p-6 lg:p-8 backdrop-blur-sm animate-in fade-in duration-200">
-      
-      {/* Container gigante: max-w-4xl e altura responsiva */}
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-card shadow-2xl border border-border animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh] h-full sm:h-auto">
-        
-        {/* Header do Modal - Padding reduzido p-5 para p-4 */}
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 sm:p-6 lg:p-8 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl overflow-hidden rounded-2xl bg-card shadow-2xl border border-border animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh] h-full sm:h-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-border bg-muted/10 p-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0A66C2] shadow-sm">
@@ -45,6 +45,7 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
             </div>
           </div>
           <button 
+            type="button"
             onClick={onClose} 
             className="rounded-full p-2 text-muted-foreground hover:bg-muted transition-colors"
           >
@@ -52,13 +53,8 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
           </button>
         </div>
 
-        {/* Body - Fundo escurecido em volta do post para focar a atenção */}
         <div className="p-4 sm:p-6 md:p-8 bg-muted/30 overflow-y-auto flex-1 flex justify-center custom-scrollbar">
-          
-          {/* Mockup do Card do LinkedIn (Centralizado e max-w-3xl) */}
           <div className="w-full max-w-3xl bg-background rounded-xl shadow-md border border-border overflow-hidden flex flex-col">
-            
-            {/* Header do Post Fake - Padding reduzido p-5 para p-4 */}
             <div className="flex items-center gap-4 p-4">
               <div className="h-14 w-14 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl shrink-0 shadow-inner">
                 {initials}
@@ -78,7 +74,6 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
               </div>
             </div>
 
-            {/* Área de Edição Invisível (Textarea gigante) */}
             <div className="px-4 pb-3 flex-1 flex flex-col">
               <textarea 
                 value={text} 
@@ -88,8 +83,6 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
               />
             </div>
 
-            {/* Footer do Post Fake (Ações de engajamento) */}
-            {/* CORREÇÃO: Espaçamento interno mais compacto para evitar quebras de texto */}
             <div className="border-t border-border px-3 py-2 flex items-center justify-between text-muted-foreground/80 mt-auto">
               <div className="flex items-center gap-1 px-2.5 py-2 hover:bg-muted rounded-md cursor-pointer transition-colors">
                 <ThumbsUp className="h-4 w-4" />
@@ -108,11 +101,9 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
                 <span className="text-xs font-semibold hidden sm:inline">Enviar</span>
               </div>
             </div>
-            
           </div>
         </div>
 
-        {/* Footer do Modal - Padding reduzido p-5 para p-4 */}
         <div className="flex items-center justify-end gap-3 border-t border-border bg-muted/10 p-4 shrink-0">
           <Button variant="ghost" size="lg" onClick={onClose} disabled={loading} className="rounded-xl text-base">
             Voltar a Editar
@@ -127,8 +118,8 @@ export function PublishModal({ isOpen, onClose, initialText, onPublish, loading 
             {loading ? "Publicando..." : "Publicar no LinkedIn"}
           </Button>
         </div>
-
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
