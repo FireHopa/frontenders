@@ -17,7 +17,6 @@ import { useAuthStore } from "@/state/authStore";
 import { linkedinService } from "@/services/linkedin";
 import { instagramService } from "@/services/instagram";
 import { facebookService } from "@/services/facebook";
-import { InstagramConnectButton } from "@/components/instagram/InstagramConnectButton";
 import { youtubeService } from "@/services/youtube";
 import { googleBusinessProfileService } from "@/services/googleBusinessProfile";
 import { tiktokService } from "@/services/tiktok";
@@ -109,12 +108,16 @@ function ActionButton({
   loading,
   disabled,
   variant = "connect",
+  className,
+  icon,
   children,
 }: {
   onClick?: () => void;
   loading?: boolean;
   disabled?: boolean;
   variant?: "connect" | "disconnect";
+  className?: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const isDisconnect = variant === "disconnect";
@@ -124,13 +127,21 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60",
         isDisconnect
-          ? "border-white/10 bg-white/[0.04] text-white/78 hover:bg-white/[0.08]"
-          : "border-white/12 bg-white text-slate-950 hover:scale-[1.01] hover:bg-white/92",
+          ? "border border-white/10 bg-white/[0.04] text-white/78 hover:bg-white/[0.08]"
+          : className || "border border-white/12 bg-white text-slate-950 hover:scale-[1.01] hover:bg-white/92",
       )}
     >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : isDisconnect ? <Unplug className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+      {loading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : isDisconnect ? (
+        <Unplug className="h-4 w-4" />
+      ) : icon ? (
+        icon
+      ) : (
+        <ArrowUpRight className="h-4 w-4" />
+      )}
       {children}
     </button>
   );
@@ -161,6 +172,10 @@ export default function AccountPage() {
       toastApiError(error, "Erro ao gerar a URL do LinkedIn");
       setIsLinking(false);
     }
+  };
+
+  const handleConnectInstagram = async () => {
+    instagramService.startAuth("/conta");
   };
 
   const handleDisconnectInstagram = async () => {
@@ -317,7 +332,13 @@ export default function AccountPage() {
             LinkedIn já conectado
           </div>
         ) : (
-          <ActionButton onClick={handleConnectLinkedIn} loading={isLinking} disabled={isLinking}>
+          <ActionButton 
+            onClick={handleConnectLinkedIn} 
+            loading={isLinking} 
+            disabled={isLinking}
+            className="border-none bg-[#0A66C2] text-white shadow-md hover:scale-[1.01] hover:bg-[#004182]"
+            icon={<Linkedin className="h-4 w-4" />}
+          >
             Vincular LinkedIn
           </ActionButton>
         ),
@@ -341,11 +362,13 @@ export default function AccountPage() {
             Desconectar Instagram
           </ActionButton>
         ) : (
-          <InstagramConnectButton
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white text-sm font-medium text-slate-950 transition-all duration-200 hover:scale-[1.01] hover:bg-white/92"
+          <ActionButton 
+            onClick={handleConnectInstagram}
+            className="border-none bg-gradient-to-r from-pink-500 via-fuchsia-500 to-orange-400 text-white shadow-md transition-all duration-200 hover:scale-[1.01] hover:opacity-95"
+            icon={<Instagram className="h-4 w-4" />}
           >
             Vincular Instagram
-          </InstagramConnectButton>
+          </ActionButton>
         ),
       },
       {
@@ -368,7 +391,13 @@ export default function AccountPage() {
             Desconectar Facebook
           </ActionButton>
         ) : (
-          <ActionButton onClick={handleConnectFacebook} loading={isLinkingFacebook} disabled={isLinkingFacebook}>
+          <ActionButton 
+            onClick={handleConnectFacebook} 
+            loading={isLinkingFacebook} 
+            disabled={isLinkingFacebook}
+            className="border-none bg-[#1877F2] text-white shadow-md hover:scale-[1.01] hover:bg-[#0C5DC7]"
+            icon={<Facebook className="h-4 w-4" />}
+          >
             Vincular Facebook
           </ActionButton>
         ),
@@ -392,7 +421,13 @@ export default function AccountPage() {
             Desconectar YouTube
           </ActionButton>
         ) : (
-          <ActionButton onClick={handleConnectYouTube} loading={isLinkingYouTube} disabled={isLinkingYouTube}>
+          <ActionButton 
+            onClick={handleConnectYouTube} 
+            loading={isLinkingYouTube} 
+            disabled={isLinkingYouTube}
+            className="border-none bg-[#FF0000] text-white shadow-md hover:scale-[1.01] hover:bg-[#CC0000]"
+            icon={<Youtube className="h-4 w-4" />}
+          >
             Vincular YouTube
           </ActionButton>
         ),
@@ -416,7 +451,13 @@ export default function AccountPage() {
             Desconectar TikTok
           </ActionButton>
         ) : (
-          <ActionButton onClick={handleConnectTikTok} loading={isLinkingTikTok} disabled={isLinkingTikTok}>
+          <ActionButton 
+            onClick={handleConnectTikTok} 
+            loading={isLinkingTikTok} 
+            disabled={isLinkingTikTok}
+            className="border border-white/10 bg-zinc-900 text-white shadow-md hover:scale-[1.01] hover:bg-zinc-800"
+            icon={<Sparkles className="h-4 w-4" />}
+          >
             Vincular TikTok
           </ActionButton>
         ),
@@ -445,6 +486,8 @@ export default function AccountPage() {
             onClick={handleConnectGoogleBusiness}
             loading={isLinkingGoogleBusiness}
             disabled={isLinkingGoogleBusiness}
+            className="border-none bg-[#4285F4] text-white shadow-md hover:scale-[1.01] hover:bg-[#3367D6]"
+            icon={<Building2 className="h-4 w-4" />}
           >
             Vincular Perfil Google
           </ActionButton>
@@ -454,6 +497,7 @@ export default function AccountPage() {
     [
       handleConnectFacebook,
       handleConnectGoogleBusiness,
+      handleConnectInstagram,
       handleConnectLinkedIn,
       handleConnectTikTok,
       handleConnectYouTube,
