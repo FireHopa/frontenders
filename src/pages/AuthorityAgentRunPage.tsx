@@ -44,6 +44,13 @@ import { GoogleBusinessApplyModal, parseGoogleBusinessPreview } from "@/componen
 
 const STORAGE_KEY = "ori_authority_nucleus_v1";
 
+type ExtraFieldValues = Record<string, string>;
+type VideoFormatRecommendation = {
+  recommended_format_id: string;
+  recommended_format_label: string;
+  rationale: string;
+} | null;
+
 export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "html"): string {
   try {
     const data = JSON.parse(raw);
@@ -276,6 +283,11 @@ function ThemeModal({
   onClose,
   onGenerateThemes,
   onExecute,
+  extraFieldValues,
+  setExtraFieldValue,
+  videoFormatRecommendation,
+  isAnalyzingVideoFormat,
+  onAnalyzeVideoFormat,
 }: {
   open: boolean;
   task: AuthorityTask | null;
@@ -287,6 +299,11 @@ function ThemeModal({
   onClose: () => void;
   onGenerateThemes: () => void;
   onExecute: (theme: string) => void;
+  extraFieldValues: ExtraFieldValues;
+  setExtraFieldValue: (key: string, value: string) => void;
+  videoFormatRecommendation: VideoFormatRecommendation;
+  isAnalyzingVideoFormat: boolean;
+  onAnalyzeVideoFormat: () => void;
 }) {
   if (!open || !task) return null;
 
@@ -353,45 +370,98 @@ function ThemeModal({
             </div>
           </div>
 
-          {showAiSuggestions && (<>
-          <div className="relative py-2">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border/50" /></div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-3 text-muted-foreground rounded-full border border-border/50">Ou peça ajuda à IA</span>
-            </div>
-          </div>
+          {task.extraFields && task.extraFields.length > 0 ? (
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-background/60 p-4">
+              {task.extraFields.map((field) => {
+                const value = extraFieldValues[field.key] || "";
+                return (
+                  <div key={field.key} className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">{field.label}</label>
+                    <select
+                      value={value}
+                      onChange={(e) => setExtraFieldValue(field.key, e.target.value)}
+                      className="h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm"
+                    >
+                      <option value="">{field.placeholder || "Selecione"}</option>
+                      {field.options.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
 
-          {isFetchingThemes ? (
-            <div className="py-8 flex flex-col items-center justify-center gap-4">
-              <Loader2 className="h-10 w-10 text-google-blue animate-spin" />
-              <p className="text-sm font-medium text-muted-foreground animate-pulse">A IA está a analisar o núcleo e a pensar em temas virais...</p>
+                    {field.aiRecommended ? (
+                      <div className="rounded-2xl border border-dashed border-google-blue/30 bg-google-blue/5 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-google-blue">Recomendação da IA</p>
+                            <p className="text-sm text-muted-foreground mt-1">A IA analisa o tema e sugere o melhor formato para gravar.</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-xl"
+                            disabled={!customTheme.trim() || isAnalyzingVideoFormat}
+                            onClick={onAnalyzeVideoFormat}
+                          >
+                            {isAnalyzingVideoFormat ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2 text-google-blue" />}
+                            Analisar melhor formato
+                          </Button>
+                        </div>
+
+                        {videoFormatRecommendation ? (
+                          <div className="mt-3 rounded-xl border border-google-blue/20 bg-background/80 p-3">
+                            <p className="text-sm font-semibold text-foreground">Formato recomendado: <span className="text-google-blue">{videoFormatRecommendation.recommended_format_label}</span></p>
+                            <p className="text-sm text-muted-foreground mt-1">{videoFormatRecommendation.rationale}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
-          ) : suggestedThemes.length > 0 ? (
-            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <label className="text-sm font-semibold text-foreground px-1 uppercase tracking-wider text-muted-foreground">Sugestões Estratégicas (IA)</label>
-              <div className="grid gap-2">
-                {suggestedThemes.map((theme, idx) => (
-                  <Button
-                    key={idx}
-                    variant="outline"
-                    className="h-auto py-3.5 px-4 justify-start text-left font-medium whitespace-normal bg-card hover:bg-[rgba(0,200,232,0.05)] hover:border-google-blue/30 hover:text-google-blue transition-all rounded-xl shadow-sm"
-                    onClick={() => onExecute(theme)}
-                  >
-                    <ArrowRight className="h-4 w-4 mr-3 shrink-0 opacity-50" />
-                    {theme}
-                  </Button>
-                ))}
+          ) : null}
+
+          {showAiSuggestions && (
+            <>
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border/50" /></div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-3 text-muted-foreground rounded-full border border-border/50">Ou peça ajuda à IA</span>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex justify-center">
-              <Button variant="outline" className="rounded-xl shadow-sm hover:text-google-blue hover:bg-google-blue/5 border-dashed w-full py-6 transition-all" onClick={onGenerateThemes}>
-                <Sparkles className="h-5 w-5 mr-2 text-google-blue" />
-                Gerar 5 Temas com IA (Custa 2 Créditos)
-              </Button>
-            </div>
+
+              {isFetchingThemes ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="h-10 w-10 text-google-blue animate-spin" />
+                  <p className="text-sm font-medium text-muted-foreground animate-pulse">A IA está a analisar o núcleo e a pensar em temas estratégicos...</p>
+                </div>
+              ) : suggestedThemes.length > 0 ? (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <label className="text-sm font-semibold text-foreground px-1 uppercase tracking-wider text-muted-foreground">Sugestões Estratégicas (IA)</label>
+                  <div className="grid gap-2">
+                    {suggestedThemes.map((theme, idx) => (
+                      <Button
+                        key={idx}
+                        variant="outline"
+                        className="h-auto py-3.5 px-4 justify-start text-left font-medium whitespace-normal bg-card hover:bg-[rgba(0,200,232,0.05)] hover:border-google-blue/30 hover:text-google-blue transition-all rounded-xl shadow-sm"
+                        onClick={() => onExecute(theme)}
+                      >
+                        <ArrowRight className="h-4 w-4 mr-3 shrink-0 opacity-50" />
+                        {theme}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-center">
+                  <Button variant="outline" className="rounded-xl shadow-sm hover:text-google-blue hover:bg-google-blue/5 border-dashed w-full py-6 transition-all" onClick={onGenerateThemes}>
+                    <Sparkles className="h-5 w-5 mr-2 text-google-blue" />
+                    Gerar 5 Temas com IA (Custa 2 Créditos)
+                  </Button>
+                </div>
+              )}
+            </>
           )}
-          </>)}
         </div>
       </div>
     </div>
@@ -422,6 +492,9 @@ export default function AuthorityAgentRunPage() {
   const [suggestedThemes, setSuggestedThemes] = useState<string[]>([]);
   const [isFetchingThemes, setIsFetchingThemes] = useState(false);
   const [customTheme, setCustomTheme] = useState("");
+  const [extraFieldValues, setExtraFieldValues] = useState<ExtraFieldValues>({});
+  const [videoFormatRecommendation, setVideoFormatRecommendation] = useState<VideoFormatRecommendation>(null);
+  const [isAnalyzingVideoFormat, setIsAnalyzingVideoFormat] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   const { user, deductCredits } = useAuthStore();
@@ -465,6 +538,8 @@ export default function AuthorityAgentRunPage() {
     const resolvedTask: AuthorityTask = task || { title: "Estratégia Completa Padrão", inputMode: "direct", aiSuggestions: false };
     setSuggestedThemes([]);
     setCustomTheme("");
+    setExtraFieldValues({});
+    setVideoFormatRecommendation(null);
 
     if (resolvedTask.inputMode === "direct") {
       await executeTask("", resolvedTask);
@@ -472,6 +547,30 @@ export default function AuthorityAgentRunPage() {
     }
 
     setThemeModalTask(resolvedTask);
+  }
+
+  function setExtraFieldValue(key: string, value: string) {
+    setExtraFieldValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleAnalyzeVideoFormat() {
+    if (!agentKey || !themeModalTask || !customTheme.trim()) return;
+    setIsAnalyzingVideoFormat(true);
+    try {
+      const rawNucleus = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      const res = await api.authorityAgents.suggestVideoFormat({
+        agent_key: agentKey,
+        theme: customTheme,
+        nucleus: rawNucleus,
+      });
+      setVideoFormatRecommendation(res);
+      setExtraFieldValue("video_format", res.recommended_format_id);
+      toastSuccess("Melhor formato recomendado pela IA!");
+    } catch (e: any) {
+      toastApiError(e, "Falha ao analisar o melhor formato");
+    } finally {
+      setIsAnalyzingVideoFormat(false);
+    }
   }
 
   async function handleGenerateThemesWithIA() {
@@ -517,6 +616,12 @@ export default function AuthorityAgentRunPage() {
           ...(activeTask && activeTask.title !== "Estratégia Completa Padrão" ? { requested_task: activeTask.prompt || activeTask.title } : {}),
           ...(finalTheme ? { selected_theme: finalTheme } : {}),
           ...(activeTask?.inputMode === "textarea" && finalTheme ? { review_to_reply: finalTheme } : {}),
+          ...(Object.keys(extraFieldValues).length ? extraFieldValues : {}),
+          ...(videoFormatRecommendation ? {
+            recommended_video_format: videoFormatRecommendation.recommended_format_label,
+            recommended_video_format_id: videoFormatRecommendation.recommended_format_id,
+            recommended_video_format_reason: videoFormatRecommendation.rationale,
+          } : {}),
         },
       };
 
@@ -742,6 +847,7 @@ export default function AuthorityAgentRunPage() {
     setIsPublishing(true);
     try {
       const res = await youtubeService.publish({
+        title: values.title,
         description: values.description,
         privacy_status: values.privacyStatus,
         made_for_kids: values.madeForKids,
@@ -941,6 +1047,11 @@ export default function AuthorityAgentRunPage() {
         onClose={() => setThemeModalTask(null)}
         onGenerateThemes={handleGenerateThemesWithIA}
         onExecute={executeTask}
+        extraFieldValues={extraFieldValues}
+        setExtraFieldValue={setExtraFieldValue}
+        videoFormatRecommendation={videoFormatRecommendation}
+        isAnalyzingVideoFormat={isAnalyzingVideoFormat}
+        onAnalyzeVideoFormat={handleAnalyzeVideoFormat}
       />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border rounded-3xl p-6 shadow-sm">

@@ -123,6 +123,7 @@ export interface BusinessCoreOut {
   linkedin: string;
   youtube: string;
   tiktok: string;
+  skybob: string;
 
   updated_at: ISODateString;
   knowledge_text?: string;
@@ -150,14 +151,40 @@ export interface BusinessCoreIn {
   linkedin?: string | null;
   youtube?: string | null;
   tiktok?: string | null;
+  skybob?: string | null;
   knowledge_text?: string;
   knowledge_files_json?: string;
+}
+
+export interface SkyBobCard {
+  id: string;
+  section: string;
+  title: string;
+  body: string;
+  bullets: string[];
+  badges: string[];
+}
+
+export interface SkyBobRunResponse {
+  overview: string;
+  success_patterns: string[];
+  mistakes: string[];
+  opportunities: string[];
+  calendar_recommendations: string[];
+  cards: SkyBobCard[];
+  serialized_text: string;
 }
 
 export interface AuthorityAgentRunRequest {
   client_id: string;
   agent_key: string;
   nucleus: BusinessCoreIn | Record<string, any>;
+}
+
+export interface SuggestVideoFormatResponse {
+  recommended_format_id: string;
+  recommended_format_label: string;
+  rationale: string;
 }
 
 export interface AuthorityAgentRunGlobalRequest {

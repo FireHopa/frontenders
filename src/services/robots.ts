@@ -15,6 +15,8 @@ import type {
   BusinessCoreOut,
   AuthorityAgentRunRequest,
   AuthorityAgentRunResponse,
+  SuggestVideoFormatResponse,
+  SkyBobRunResponse,
 } from "@/types/api";
 
 export type AuthorityAgentRunItem = {
@@ -34,15 +36,31 @@ export type AuthorityAgentRunGlobalIn = {
   nucleus: Record<string, any>;
 };
 
-// NOVO TIPO PARA SUGESTÃO DE TEMAS
 export type SuggestThemesIn = {
   agent_key: string;
   task: string;
   nucleus: Record<string, any>;
 };
 
+export type SuggestVideoFormatIn = {
+  agent_key: string;
+  theme: string;
+  nucleus: Record<string, any>;
+};
+
+export type SkyBobRunIn = {
+  nucleus: Record<string, any>;
+  preferences?: Record<string, any>;
+  previous_study?: Record<string, any>;
+};
+
 export const api = {
   health: () => http<HealthResponse>("/api/health"),
+
+  skybob: {
+    run: (payload: SkyBobRunIn) =>
+      http<SkyBobRunResponse>(`/api/skybob/run`, { method: "POST", json: payload }),
+  },
 
   robots: {
     list: () => http<RobotOut[]>("/api/robots"),
@@ -103,14 +121,15 @@ export const api = {
       http<AuthorityAgentRunItem>(
         `/api/authority-agents/run/${encodeURIComponent(String(runId))}?client_id=${encodeURIComponent(clientId)}`
       ),
-      
-    // NOVA CHAMADA: Para atualizar/editar o texto
+
     updateRunGlobal: (runId: number, payload: { output_text: string }) =>
       http<AuthorityAgentRunItem>(`/api/authority-agents/run/${runId}`, { method: "PATCH", json: payload }),
-      
-    // NOVA CHAMADA PARA SUGERIR TEMAS
+
     suggestThemes: (payload: SuggestThemesIn) =>
       http<{ themes: string[] }>(`/api/authority-agents/suggest-themes`, { method: "POST", json: payload }),
+
+    suggestVideoFormat: (payload: SuggestVideoFormatIn) =>
+      http<SuggestVideoFormatResponse>(`/api/authority-agents/suggest-video-format`, { method: "POST", json: payload }),
   },
 } as const;
 

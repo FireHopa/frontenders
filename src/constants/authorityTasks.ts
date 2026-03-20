@@ -1,5 +1,15 @@
 export type AuthorityTaskInputMode = "theme" | "textarea" | "direct";
 
+export type AuthorityTaskExtraField = {
+  key: string;
+  label: string;
+  type: "select";
+  placeholder?: string;
+  options: { value: string; label: string }[];
+  required?: boolean;
+  aiRecommended?: boolean;
+};
+
 export type AuthorityTask = {
   title: string;
   prompt?: string;
@@ -8,7 +18,23 @@ export type AuthorityTask = {
   inputPlaceholder?: string;
   submitLabel?: string;
   aiSuggestions?: boolean;
+  extraFields?: AuthorityTaskExtraField[];
 };
+
+const VIDEO_FORMAT_OPTIONS = [
+  { value: "direct_camera", label: "Você falando direto para a câmera" },
+  { value: "screen_plus_commentary", label: "Tela + você comentando" },
+  { value: "front_of_content", label: "Você na frente do conteúdo" },
+  { value: "reaction_commentary", label: "Reação ou comentário" },
+  { value: "video_checklist", label: "Checklist em vídeo" },
+  { value: "before_after", label: "Antes e depois" },
+  { value: "common_error_fix", label: "Erro comum + correção" },
+  { value: "social_proof", label: "Prova social" },
+  { value: "behind_the_scenes", label: "Bastidores com narração" },
+  { value: "myth_vs_reality", label: "Mito vs realidade" },
+  { value: "comparison_a_vs_b", label: "Comparativo A vs B" },
+  { value: "quick_diagnosis", label: "Diagnóstico ou opinião rápida" },
+];
 
 export const YOUTUBE_TASKS: AuthorityTask[] = [
   { title: "Roteiro de Vídeo Longo (Conteúdo Pilar)", inputMode: "theme", aiSuggestions: true },
@@ -18,11 +44,82 @@ export const YOUTUBE_TASKS: AuthorityTask[] = [
 ];
 
 export const INSTAGRAM_TASKS: AuthorityTask[] = [
-  { title: "Roteiro para Reels (Vídeo Curto)", inputMode: "theme", aiSuggestions: true },
-  { title: "Carrossel Educativo / Conversão", inputMode: "theme", aiSuggestions: true },
-  { title: "Post Estático (Imagem/Posicionamento)", inputMode: "theme", aiSuggestions: true },
-  { title: "Roteiro de Sequência para Stories", inputMode: "theme", aiSuggestions: true },
-  { title: "Otimização de Bio e Destaques", inputMode: "direct", aiSuggestions: false }
+  {
+    title: "Bio estratégica (AEO, AIO E GEO)",
+    inputMode: "direct",
+    aiSuggestions: false,
+  },
+  {
+    title: "Destaques estratégicos (AEO, AIO E GEO)",
+    inputMode: "direct",
+    aiSuggestions: false,
+  },
+  {
+    title: "CTA estratégico para bio, post, stories ou link",
+    inputMode: "theme",
+    aiSuggestions: true,
+    inputLabel: "Qual CTA você quer criar?",
+    inputPlaceholder: "Ex: CTA para bio de consultoria, CTA para post de autoridade...",
+    submitLabel: "Gerar CTA",
+  },
+  {
+    title: "Roteiros",
+    inputMode: "theme",
+    aiSuggestions: true,
+    inputLabel: "Qual é o tema principal do vídeo?",
+    inputPlaceholder: "Ex: Por que empresas boas continuam invisíveis no Instagram...",
+    submitLabel: "Gerar roteiro",
+    extraFields: [
+      {
+        key: "video_format",
+        label: "Formato do vídeo",
+        type: "select",
+        placeholder: "Escolha o formato do vídeo",
+        options: VIDEO_FORMAT_OPTIONS,
+        required: true,
+        aiRecommended: true,
+      },
+    ],
+  },
+  {
+    title: "Legendas estratégicas (AEO, AIO E GEO)",
+    inputMode: "theme",
+    aiSuggestions: true,
+    inputLabel: "Qual é o tema principal do conteúdo?",
+    inputPlaceholder: "Ex: Por que o conteúdo bonito não gera autoridade nem lead",
+    submitLabel: "Gerar legendas",
+    extraFields: [
+      {
+        key: "content_type",
+        label: "Esse conteúdo é",
+        type: "select",
+        placeholder: "Escolha o tipo de conteúdo",
+        options: [
+          { value: "reels", label: "reels" },
+          { value: "carrossel", label: "carrossel" },
+          { value: "post", label: "post" },
+          { value: "video_educativo", label: "vídeo educativo" },
+          { value: "opiniao", label: "opinião" },
+          { value: "react", label: "react" },
+          { value: "outro", label: "outro" },
+        ],
+        required: true,
+      },
+      {
+        key: "content_goal",
+        label: "O objetivo principal é",
+        type: "select",
+        placeholder: "Escolha o objetivo principal",
+        options: [
+          { value: "gerar_alcance", label: "gerar alcance" },
+          { value: "gerar_autoridade", label: "gerar autoridade" },
+          { value: "gerar_conversao", label: "gerar conversão" },
+          { value: "gerar_debate", label: "gerar debate" },
+        ],
+        required: true,
+      },
+    ],
+  },
 ];
 
 export const TIKTOK_TASKS: AuthorityTask[] = [

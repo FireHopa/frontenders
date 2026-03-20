@@ -14,7 +14,8 @@ import {
   Database,
   LogOut,
   Coins,
-  Image as ImageIcon // <-- Ícone novo importado aqui!
+  Image as ImageIcon,
+  Rocket
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/constants/app";
@@ -46,7 +47,8 @@ const items: Item[] = [
     ]
   },
   { to: "/competition", label: "Análise da Concorrência", Icon: Swords },
-  { to: "/image-engine", label: "Motor de Imagem", Icon: ImageIcon }, // <-- Rota nova adicionada aqui!
+  { to: "/image-engine", label: "Motor de Imagem", Icon: ImageIcon },
+  { to: "/skybob", label: "SkyBob", Icon: Rocket },
   { to: "/projects", label: "Projetos", Icon: FolderKanban },
   { to: "/materials", label: "Materiais de Apoio", Icon: BookOpen },
   { to: "/video", label: "Video Aula", Icon: Video },

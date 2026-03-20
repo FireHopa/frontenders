@@ -149,6 +149,9 @@ export default function ImageEditReferenceView({ onBack }: Props) {
   const [resolutionMode, setResolutionMode] = useState<"preset" | "custom">("preset");
   const [customWidth, setCustomWidth] = useState<string>("1024");
   const [customHeight, setCustomHeight] = useState<string>("1280");
+  const [preserveOriginalFrame, setPreserveOriginalFrame] = useState(true);
+  const [allowResizeCrop, setAllowResizeCrop] = useState(false);
+  const [autoUseLatestAsBase, setAutoUseLatestAsBase] = useState(true);
   const [promptInput, setPromptInput] = useState<string>("");
   const [lastInstruction, setLastInstruction] = useState<string>("");
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
@@ -198,6 +201,12 @@ export default function ImageEditReferenceView({ onBack }: Props) {
     resolutionMode === "custom" && hasValidCustomDimensions ? parsedCustomHeight : undefined
   );
 
+  const activeBaseLabel = useMemo(() => {
+    if (autoUseLatestAsBase && results.length > 0) return "Última edição";
+    if (referenceFile) return "Original";
+    return "Vazia";
+  }, [autoUseLatestAsBase, results.length, referenceFile]);
+
   useEffect(() => {
     if (!referenceFile) {
       setReferencePreview("");
@@ -230,6 +239,16 @@ export default function ImageEditReferenceView({ onBack }: Props) {
     pushAssistantMessage(`Imagem carregada: ${file.name}. O que vamos alterar nela?`, "success");
   };
 
+  const resolveActiveReferenceFile = async () => {
+    if (autoUseLatestAsBase && results[0]?.url) {
+      const response = await fetch(results[0].url);
+      const blob = await response.blob();
+      const extension = blob.type.includes("png") ? "png" : blob.type.includes("webp") ? "webp" : "jpg";
+      return new File([blob], `edicao-base-ativa-${Date.now()}.${extension}`, { type: blob.type || "image/png" });
+    }
+    return referenceFile;
+  };
+
   const handleGenerate = async (instruction?: string) => {
     const finalInstruction = (instruction ?? promptInput).trim();
 
@@ -243,7 +262,7 @@ export default function ImageEditReferenceView({ onBack }: Props) {
       pushAssistantMessage("Me diga o que você quer alterar na imagem.", "warning");
       return;
     }
-    if (resolutionMode === "custom" && !hasValidCustomDimensions) {
+    if (resolutionMode === "custom" && allowResizeCrop && !hasValidCustomDimensions) {
       setStatusText("Dimensões inválidas.");
       pushAssistantMessage("As dimensões customizadas devem estar entre 256 e 4096 pixels.", "warning");
       return;
@@ -260,16 +279,24 @@ export default function ImageEditReferenceView({ onBack }: Props) {
     setLocalizedMode(false);
     setStatusText("Analisando imagem e preparando prompt...");
 
+    const activeReferenceFile = await resolveActiveReferenceFile();
+    if (!activeReferenceFile) {
+      throw new Error("Não encontrei uma imagem-base válida para esta edição.");
+    }
+
     const token = getAuthToken();
     const formData = new FormData();
-    formData.append("reference_image", referenceFile);
+    formData.append("reference_image", activeReferenceFile);
     formData.append("formato", formato);
     formData.append("qualidade", qualidade);
     formData.append("instrucoes_edicao", finalInstruction);
-    if (resolutionMode === "custom") {
+    if (resolutionMode === "custom" && allowResizeCrop && hasValidCustomDimensions) {
       formData.append("width", String(parsedCustomWidth));
       formData.append("height", String(parsedCustomHeight));
     }
+    formData.append("preserve_original_frame", preserveOriginalFrame ? "true" : "false");
+    formData.append("allow_resize_crop", allowResizeCrop ? "true" : "false");
+    formData.append("prefer_localized_edit", preserveOriginalFrame ? "true" : "false");
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/image-engine/edit/stream`, {
@@ -338,8 +365,8 @@ export default function ImageEditReferenceView({ onBack }: Props) {
                 engine_id: item.engine_id,
                 format: formato,
                 quality: qualidade,
-                width: resolutionMode === "custom" ? parsedCustomWidth : undefined,
-                height: resolutionMode === "custom" ? parsedCustomHeight : undefined,
+                width: resolutionMode === "custom" && allowResizeCrop ? parsedCustomWidth : undefined,
+                height: resolutionMode === "custom" && allowResizeCrop ? parsedCustomHeight : undefined,
                 prompt: finalInstruction,
                 improvedPrompt: payload.improved_prompt || undefined,
               }))
@@ -350,7 +377,7 @@ export default function ImageEditReferenceView({ onBack }: Props) {
       pushAssistantMessage(
         streamLocalizedMode
           ? "Prontinho! Focamos em uma edição localizada para não descaracterizar sua arte original."
-          : "Prontinho! A imagem foi recriada aplicando sua alteração com sucesso.",
+          : "Prontinho! A alteração foi aplicada. Se quiser, posso refinar mais um ponto específico.",
         "success"
       );
     } catch (error) {
@@ -413,8 +440,8 @@ export default function ImageEditReferenceView({ onBack }: Props) {
             {[
               { label: "Formato", value: resolutionMode === "custom" ? "Auto" : currentFormat?.shortLabel },
               { label: "Qualidade", value: currentQuality?.shortLabel },
-              { label: "Base Ativa", value: latestResult ? "Edição" : referenceFile ? "Original" : "Vazia" },
-              { label: "Resolução", value: resolutionMode === "custom" && hasValidCustomDimensions ? `${parsedCustomWidth}x${parsedCustomHeight}` : "Nativa" },
+              { label: "Base Ativa", value: activeBaseLabel },
+              { label: "Resolução", value: resolutionMode === "custom" ? allowResizeCrop && hasValidCustomDimensions ? `${parsedCustomWidth}x${parsedCustomHeight}` : "Preservada" : "Nativa" },
             ].map((stat, i) => (
               <div key={i} className="flex flex-col justify-center rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-2.5 backdrop-blur-sm shadow-sm">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{stat.label}</span>
@@ -702,7 +729,7 @@ export default function ImageEditReferenceView({ onBack }: Props) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-                  <div className="col-span-2 text-xs text-amber-300/80 mb-2">A IA fará o crop/resize para encaixar nas medidas abaixo.</div>
+                  <div className="col-span-2 text-xs text-amber-300/80 mb-2">As medidas ficam salvas aqui, mas só serão enviadas ao backend se você ativar a opção de crop/resize abaixo.</div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Largura (px)</label>
                     <Input
@@ -725,6 +752,52 @@ export default function ImageEditReferenceView({ onBack }: Props) {
                   </div>
                 </div>
               )}
+
+              <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                <button
+                  type="button"
+                  onClick={() => !isGenerating && setPreserveOriginalFrame((prev) => !prev)}
+                  className="flex w-full items-start justify-between gap-4 rounded-xl border border-white/5 bg-black/20 px-4 py-3 text-left transition hover:border-white/10 hover:bg-white/[0.04]"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-white">Preservar enquadramento original</div>
+                    <div className="mt-1 text-xs text-slate-400">Ligado por padrão para troca de texto, cidade, data, CTA e ajustes localizados.</div>
+                  </div>
+                  <div className={cn("mt-1 h-6 w-11 rounded-full border transition", preserveOriginalFrame ? "border-emerald-400/60 bg-emerald-500/20" : "border-white/10 bg-white/5")}>
+                    <div className={cn("m-0.5 h-4.5 w-4.5 rounded-full bg-white transition-transform", preserveOriginalFrame ? "translate-x-5" : "translate-x-0")} />
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => !isGenerating && setAutoUseLatestAsBase((prev) => !prev)}
+                  className="flex w-full items-start justify-between gap-4 rounded-xl border border-white/5 bg-black/20 px-4 py-3 text-left transition hover:border-white/10 hover:bg-white/[0.04]"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-white">Usar última edição como base automática</div>
+                    <div className="mt-1 text-xs text-slate-400">Evita voltar sem querer para a imagem original no próximo ajuste.</div>
+                  </div>
+                  <div className={cn("mt-1 h-6 w-11 rounded-full border transition", autoUseLatestAsBase ? "border-emerald-400/60 bg-emerald-500/20" : "border-white/10 bg-white/5")}>
+                    <div className={cn("m-0.5 h-4.5 w-4.5 rounded-full bg-white transition-transform", autoUseLatestAsBase ? "translate-x-5" : "translate-x-0")} />
+                  </div>
+                </button>
+
+                {resolutionMode === "custom" && (
+                  <button
+                    type="button"
+                    onClick={() => !isGenerating && setAllowResizeCrop((prev) => !prev)}
+                    className="flex w-full items-start justify-between gap-4 rounded-xl border border-white/5 bg-black/20 px-4 py-3 text-left transition hover:border-white/10 hover:bg-white/[0.04]"
+                  >
+                    <div>
+                      <div className="text-sm font-semibold text-white">Permitir crop/resize nesta edição</div>
+                      <div className="mt-1 text-xs text-slate-400">Desligado por padrão. Ative apenas quando realmente quiser reenquadrar a arte no tamanho exato.</div>
+                    </div>
+                    <div className={cn("mt-1 h-6 w-11 rounded-full border transition", allowResizeCrop ? "border-amber-400/60 bg-amber-500/20" : "border-white/10 bg-white/5")}>
+                      <div className={cn("m-0.5 h-4.5 w-4.5 rounded-full bg-white transition-transform", allowResizeCrop ? "translate-x-5" : "translate-x-0")} />
+                    </div>
+                  </button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -762,7 +835,7 @@ export default function ImageEditReferenceView({ onBack }: Props) {
               <div className="mt-6 rounded-xl bg-white/5 p-4 flex items-start gap-3 border border-white/5">
                 <Check className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-sm text-slate-300 leading-relaxed">
-                  <span className="font-medium text-white">Dica:</span> Para trocar textos, especifique o texto exato. Ex: <span className="text-emerald-300">"troque 'Preço' por 'Promoção'"</span>.
+                  <span className="font-medium text-white">Dica:</span> Para trocar textos, especifique o texto exato. Ex: <span className="text-emerald-300">"troque 'Preço' por 'Promoção'"</span>. Quando o objetivo for só corrigir texto, mantenha o enquadramento original e deixe o crop desligado.
                 </p>
               </div>
             </CardContent>

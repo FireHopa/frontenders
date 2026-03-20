@@ -27,6 +27,7 @@ import { FacebookCallbackPage } from "@/pages/FacebookCallbackPage";
 import YouTubeCallbackPage from "@/pages/YouTubeCallbackPage";
 import TikTokCallbackPage from "@/pages/TikTokCallbackPage";
 import GoogleBusinessCallbackPage from "@/pages/GoogleBusinessCallbackPage";
+import SkyBobPage from "@/pages/SkyBobPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
           { path: "materials", element: <MaterialsPage /> },
           { path: "video", element: <VideoPage /> },
           { path: "image-engine", element: <ImageEnginePage /> },
+          { path: "skybob", element: <SkyBobPage /> },
           { path: "authority-agents", element: <AuthorityAgentsPage /> },
           { path: "authority-agents/nucleus", element: <AuthorityNucleusPage /> },
           { path: "authority-agents/chat/:agentKey", element: <AuthorityAgentChatPage /> },

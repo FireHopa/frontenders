@@ -26,6 +26,9 @@ type ScriptJson = {
   titulo_da_tela?: string;
   analise_do_tema?: string;
   estrategia_do_video?: string;
+  video_format_selected?: string;
+  video_format_recommended?: string;
+  video_format_rationale?: string;
   hooks?: string[];
   roteiro_segundo_a_segundo?: Array<{
     tempo?: string;
@@ -112,8 +115,26 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
             </ScriptSection>
 
             <ScriptSection
-              icon={<Lightbulb className="h-5 w-5" />}
+              icon={<ListVideo className="h-5 w-5" />}
               number="3"
+              title="Formato do vídeo"
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-blue-200/70 bg-blue-50/70 dark:bg-[#16202a] dark:border-blue-900/50 p-5">
+                  <div className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Formato escolhido</div>
+                  <p className="text-base font-medium leading-relaxed text-blue-950/90 dark:text-blue-100/90">{parsedScript.video_format_selected || "não informado"}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 dark:bg-[#162a20] dark:border-emerald-900/50 p-5">
+                  <div className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">Melhor formato indicado</div>
+                  <p className="text-base font-medium leading-relaxed text-emerald-950/90 dark:text-emerald-100/90">{parsedScript.video_format_recommended || "não informado"}</p>
+                  {parsedScript.video_format_rationale ? <p className="mt-3 text-sm leading-relaxed text-emerald-950/80 dark:text-emerald-100/80">{parsedScript.video_format_rationale}</p> : null}
+                </div>
+              </div>
+            </ScriptSection>
+
+            <ScriptSection
+              icon={<Lightbulb className="h-5 w-5" />}
+              number="4"
               title="Hooks"
             >
               {Array.isArray(parsedScript.hooks) && parsedScript.hooks.length > 0 ? (
@@ -139,7 +160,7 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
 
             <ScriptSection
               icon={<Clock3 className="h-5 w-5" />}
-              number="4"
+              number="5"
               title="Roteiro segundo a segundo"
             >
               {Array.isArray(parsedScript.roteiro_segundo_a_segundo) &&
@@ -191,7 +212,7 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
 
             <ScriptSection
               icon={<Captions className="h-5 w-5" />}
-              number="5"
+              number="6"
               title="Texto na tela"
             >
               {Array.isArray(parsedScript.texto_na_tela) && parsedScript.texto_na_tela.length > 0 ? (
@@ -217,7 +238,7 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
 
             <ScriptSection
               icon={<Repeat2 className="h-5 w-5" />}
-              number="6"
+              number="7"
               title="Variações"
             >
               {Array.isArray(parsedScript.variacoes) && parsedScript.variacoes.length > 0 ? (
@@ -243,7 +264,7 @@ export default function ResultViewer({ title = "Resultado", text }: Props) {
 
             <ScriptSection
               icon={<AlignLeft className="h-5 w-5" />}
-              number="7"
+              number="8"
               title="Legenda"
             >
               <div className="rounded-3xl border border-border/70 bg-background/60 p-5 sm:p-6">
