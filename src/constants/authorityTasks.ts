@@ -12,6 +12,7 @@ export type AuthorityTaskExtraField = {
 
 export type AuthorityTask = {
   title: string;
+  description?: string;
   prompt?: string;
   inputMode?: AuthorityTaskInputMode;
   inputLabel?: string;
@@ -46,16 +47,19 @@ export const YOUTUBE_TASKS: AuthorityTask[] = [
 export const INSTAGRAM_TASKS: AuthorityTask[] = [
   {
     title: "Bio estratégica (AEO, AIO E GEO)",
+    description: "Reposiciona a bio para explicar com clareza quem você ajuda, o que entrega e por que vale clicar.",
     inputMode: "direct",
     aiSuggestions: false,
   },
   {
     title: "Destaques estratégicos (AEO, AIO E GEO)",
+    description: "Organiza os Destaques em blocos que fortalecem autoridade, contexto, prova e entendimento do perfil.",
     inputMode: "direct",
     aiSuggestions: false,
   },
   {
     title: "CTA estratégico para bio, post, stories ou link",
+    description: "Cria CTAs específicos para levar a audiência da atenção para a próxima ação certa.",
     inputMode: "theme",
     aiSuggestions: true,
     inputLabel: "Qual CTA você quer criar?",
@@ -64,6 +68,7 @@ export const INSTAGRAM_TASKS: AuthorityTask[] = [
   },
   {
     title: "Roteiros",
+    description: "Transforma o tema em um roteiro gravável e escolhe o formato de vídeo mais forte para retenção e clareza.",
     inputMode: "theme",
     aiSuggestions: true,
     inputLabel: "Qual é o tema principal do vídeo?",
@@ -83,8 +88,9 @@ export const INSTAGRAM_TASKS: AuthorityTask[] = [
   },
   {
     title: "Legendas estratégicas (AEO, AIO E GEO)",
+    description: "Cria legendas com intenção clara de alcance, autoridade, conversão ou debate, usando o núcleo da empresa.",
     inputMode: "theme",
-    aiSuggestions: true,
+    aiSuggestions: false,
     inputLabel: "Qual é o tema principal do conteúdo?",
     inputPlaceholder: "Ex: Por que o conteúdo bonito não gera autoridade nem lead",
     submitLabel: "Gerar legendas",
@@ -101,7 +107,6 @@ export const INSTAGRAM_TASKS: AuthorityTask[] = [
           { value: "video_educativo", label: "vídeo educativo" },
           { value: "opiniao", label: "opinião" },
           { value: "react", label: "react" },
-          { value: "outro", label: "outro" },
         ],
         required: true,
       },

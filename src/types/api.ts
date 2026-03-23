@@ -156,6 +156,22 @@ export interface BusinessCoreIn {
   knowledge_files_json?: string;
 }
 
+export interface SkyBobHook {
+  id: string;
+  hook: string;
+  angle: string;
+  format_hint: string;
+  use_case: string;
+  why_it_matches: string;
+  tags: string[];
+}
+
+export interface SkyBobHookStrategy {
+  positioning_summary: string;
+  preferred_angles: string[];
+  angles_to_reduce: string[];
+}
+
 export interface SkyBobCard {
   id: string;
   section: string;
@@ -171,6 +187,8 @@ export interface SkyBobRunResponse {
   mistakes: string[];
   opportunities: string[];
   calendar_recommendations: string[];
+  hook_strategy: SkyBobHookStrategy;
+  hooks: SkyBobHook[];
   cards: SkyBobCard[];
   serialized_text: string;
 }
