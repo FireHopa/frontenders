@@ -16,6 +16,7 @@ import type {
   AuthorityAgentRunRequest,
   AuthorityAgentRunResponse,
   SuggestVideoFormatResponse,
+  SkyBobCatalogAnalysis,
   SkyBobRunResponse,
 } from "@/types/api";
 
@@ -52,12 +53,20 @@ export type SkyBobRunIn = {
   nucleus: Record<string, any>;
   preferences?: Record<string, any>;
   previous_study?: Record<string, any>;
+  catalog_analysis?: Record<string, any> | null;
+  mode?: "full" | "refine";
+};
+
+export type SkyBobCatalogIn = {
+  nucleus: Record<string, any>;
 };
 
 export const api = {
   health: () => http<HealthResponse>("/api/health"),
 
   skybob: {
+    preflight: (payload: SkyBobCatalogIn) =>
+      http<SkyBobCatalogAnalysis>(`/api/skybob/preflight`, { method: "POST", json: payload }),
     run: (payload: SkyBobRunIn) =>
       http<SkyBobRunResponse>(`/api/skybob/run`, { method: "POST", json: payload }),
   },

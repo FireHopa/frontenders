@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Play,
   Loader2,
@@ -19,6 +20,9 @@ import {
   ArrowRight,
   Printer,
   ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Wand2
 } from "lucide-react";
 import { api, getClientId } from "@/services/robots";
 import { linkedinService } from "@/services/linkedin";
@@ -28,7 +32,7 @@ import { youtubeService } from "@/services/youtube";
 import { tiktokService, type TikTokPrivacyLevel } from "@/services/tiktok";
 import { googleBusinessProfileService } from "@/services/googleBusinessProfile";
 import { AUTHORITY_AGENTS } from "@/constants/authorityAgents";
-import { tasksByAgentKey, type AuthorityTask } from "@/constants/authorityTasks";
+import { tasksByAgentKey, type AuthorityTask, type AuthorityTaskExtraField } from "@/constants/authorityTasks";
 import ResultViewer from "@/components/authority/ResultViewer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -272,6 +276,23 @@ export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "h
   }
 }
 
+const slideVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 30 : -30,
+    opacity: 0,
+  }),
+  center: {
+    zIndex: 1,
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    zIndex: 0,
+    x: direction < 0 ? 30 : -30,
+    opacity: 0,
+  }),
+};
+
 function ThemeModal({
   open,
   task,
@@ -305,102 +326,181 @@ function ThemeModal({
   isAnalyzingVideoFormat: boolean;
   onAnalyzeVideoFormat: () => void;
 }) {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [direction, setDirection] = useState(0);
+
+  useEffect(() => {
+    if (open) {
+      setCurrentStep(1);
+      setDirection(0);
+    }
+  }, [open, task]);
+
   if (!open || !task) return null;
 
-  const taskTitle = task.title;
-  const taskTitleLower = taskTitle.toLowerCase();
-  const inputMode = task.inputMode || "theme";
-  const inputLabel =
-    task.inputLabel ||
-    (inputMode === "textarea" ? "Cole o conteúdo que será usado pela IA" : "Escreva o foco/tema do conteúdo");
-  const inputPlaceholder =
-    task.inputPlaceholder ||
-    (inputMode === "textarea"
-      ? "Cole aqui o texto que a IA deve usar como base."
-      : "Ex: Por que a nossa solução é melhor...");
-  const submitLabel = task.submitLabel || "Gerar Conteúdo";
-  const showAiSuggestions = inputMode === "theme" && task.aiSuggestions !== false;
-  const requiredFields = (task.extraFields || []).filter((field) => field.required);
-  const missingFields = requiredFields.filter((field) => !(extraFieldValues[field.key] || "").trim());
-  const isInstagramScriptTask = taskTitleLower === "roteiros";
-  const isInstagramCaptionTask = taskTitleLower.includes("legendas estratégicas");
-  const isTextareaMode = inputMode === "textarea";
-  const canSubmit = (!!customTheme.trim() || inputMode === "direct") && missingFields.length === 0 && !loading && !isAnalyzingVideoFormat;
+  // Calcula o total de passos dinamicamente (1 para o Tema + 1 para cada Extra Field)
+  const totalSteps = 1 + (task.extraFields?.length || 0);
+  const isTextareaMode = task.inputMode === "textarea";
+  
+  // Verifica se pode avançar com base no passo atual
+  const currentCanGoNext = (() => {
+    if (currentStep === 1) return !!customTheme.trim();
+    const fieldIndex = currentStep - 2;
+    const field = task.extraFields?.[fieldIndex];
+    if (field?.required) return !!(extraFieldValues[field.key] || "").trim();
+    return true;
+  })();
 
-  const stepItems = isInstagramCaptionTask
-    ? [
-        { number: "1", title: "Tema", detail: "Qual é o assunto central desse conteúdo?" },
-        { number: "2", title: "Formato", detail: "Escolha se é reels, carrossel, post, vídeo educativo, opinião ou react." },
-        { number: "3", title: "Objetivo", detail: "Defina se a legenda quer alcance, autoridade, conversão ou debate." },
-      ]
-    : isInstagramScriptTask
-      ? [
-          { number: "1", title: "Tema", detail: "Defina o assunto principal do vídeo." },
-          { number: "2", title: "Formato", detail: "A IA pode recomendar o formato mais forte ou você pode escolher manualmente." },
-          { number: "3", title: "Execução", detail: "Só depois disso o roteiro é realmente gerado." },
-        ]
-      : [
-          { number: "1", title: "Contexto", detail: "Informe o foco para a IA trabalhar em cima do núcleo da empresa." },
-          { number: "2", title: "Ajustes", detail: "Preencha os campos extras, se houver." },
-          { number: "3", title: "Geração", detail: "A IA entrega o material já estruturado." },
-        ];
+  const canSubmit = currentStep === totalSteps && currentCanGoNext && !loading && !isAnalyzingVideoFormat;
 
-  function renderOptionField(field: NonNullable<AuthorityTask["extraFields"]>[number]) {
-    const currentValue = extraFieldValues[field.key] || "";
+  const handleNext = () => {
+    if (currentStep < totalSteps && currentCanGoNext) {
+      setDirection(1);
+      setCurrentStep((p) => p + 1);
+    }
+  };
 
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setDirection(-1);
+      setCurrentStep((p) => p - 1);
+    }
+  };
+
+  function renderStep1() {
     return (
-      <div key={field.key} className="space-y-3 rounded-[1.75rem] border border-border/70 bg-background/60 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <label className="text-sm font-semibold text-foreground">{field.label}</label>
-            {field.required ? (
-              <p className="mt-1 text-xs text-muted-foreground">Campo obrigatório para gerar o resultado.</p>
-            ) : null}
-          </div>
-
-          {field.aiRecommended ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              disabled={!customTheme.trim() || isAnalyzingVideoFormat}
-              onClick={onAnalyzeVideoFormat}
-            >
-              {isAnalyzingVideoFormat ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4 text-google-blue" />
-              )}
-              Analisar melhor formato
-            </Button>
-          ) : null}
+      <div className="space-y-6">
+        <div className="space-y-3">
+          <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-google-blue/10 text-xs font-bold text-google-blue">1</span>
+            {task?.inputLabel || (isTextareaMode ? "Cole o conteúdo base" : "Qual é o tema principal?")}
+          </label>
+          {isTextareaMode ? (
+            <Textarea
+              value={customTheme}
+              onChange={(e) => setCustomTheme(e.target.value)}
+              placeholder={task?.inputPlaceholder || "Cole aqui o texto..."}
+              className="min-h-[160px] rounded-2xl shadow-sm text-base p-4 focus-visible:ring-google-blue border-border/70"
+            />
+          ) : (
+            <Input
+              value={customTheme}
+              onChange={(e) => setCustomTheme(e.target.value)}
+              placeholder={task?.inputPlaceholder || "Ex: O segredo para escalar..."}
+              className="h-14 rounded-2xl shadow-sm text-base px-4 focus-visible:ring-google-blue border-border/70"
+            />
+          )}
         </div>
 
-        {field.aiRecommended && videoFormatRecommendation ? (
-          <div className="rounded-2xl border border-google-blue/25 bg-google-blue/5 p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-google-blue">Melhor formato indicado pela IA</p>
-            <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+        {task?.aiSuggestions !== false && (
+          <div className="pt-4 border-t border-border/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
-                <p className="text-base font-semibold text-foreground">
-                  {videoFormatRecommendation.recommended_format_label}
-                </p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  {videoFormatRecommendation.rationale}
-                </p>
+                <h4 className="text-sm font-semibold text-foreground">Sem ideias?</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Deixe a IA analisar seu negócio e sugerir temas com alto potencial.</p>
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl border-google-blue/30 bg-background"
-                onClick={() => setExtraFieldValue(field.key, videoFormatRecommendation.recommended_format_id)}
+                className="rounded-xl border-google-blue/30 text-google-blue hover:bg-google-blue/5 shrink-0"
+                onClick={onGenerateThemes}
+                disabled={isFetchingThemes}
               >
-                Usar recomendação
+                {isFetchingThemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                Gerar Ideias com IA
               </Button>
             </div>
-          </div>
-        ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2">
+            {suggestedThemes.length > 0 && (
+              <div className="grid gap-3">
+                {suggestedThemes.map((theme, idx) => {
+                  const isSelected = customTheme.trim() === theme.trim();
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCustomTheme(theme)}
+                      className={`text-left p-4 rounded-2xl border transition-all duration-200 ${
+                        isSelected
+                          ? "border-google-blue bg-google-blue/5 shadow-sm ring-1 ring-google-blue/20"
+                          : "border-border/50 bg-card hover:border-google-blue/40"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
+                          isSelected ? "border-google-blue bg-google-blue text-white" : "border-border bg-background text-transparent"
+                        }`}>✓</div>
+                        <span className={`text-sm leading-relaxed font-medium ${isSelected ? 'text-google-blue' : 'text-foreground/90'}`}>
+                          {theme}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderExtraFieldStep(field: AuthorityTaskExtraField, stepNumber: number) {
+    if (!field) return null;
+    const currentValue = extraFieldValues[field.key] || "";
+    
+    let stepDescription = "Selecione a opção ideal para o conteúdo.";
+    if (field.key === "content_type") stepDescription = "Escolha o formato em que este conteúdo será publicado.";
+    if (field.key === "content_goal") stepDescription = "Qual é o principal resultado esperado dessa publicação?";
+    
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <label className="text-sm font-semibold text-foreground flex items-center gap-2 mb-1">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-google-blue/10 text-xs font-bold text-google-blue">{stepNumber}</span>
+                {field.label}
+            </label>
+            <p className="text-xs text-muted-foreground ml-8">{stepDescription}</p>
+          </div>
+          
+          {field.aiRecommended && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="rounded-xl bg-gradient-to-r from-google-blue/10 to-indigo-500/10 text-google-blue hover:from-google-blue/20 hover:to-indigo-500/20 border border-google-blue/20 shrink-0"
+              disabled={isAnalyzingVideoFormat}
+              onClick={onAnalyzeVideoFormat}
+            >
+              {isAnalyzingVideoFormat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              IA: Sugerir Melhor Formato
+            </Button>
+          )}
+        </div>
+
+        {field.aiRecommended && videoFormatRecommendation && (
+          <div className="ml-8 mb-4 p-5 rounded-2xl bg-gradient-to-br from-google-blue/10 via-transparent to-transparent border border-google-blue/30 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-google-blue/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-google-blue font-bold text-xs uppercase tracking-wider mb-1">
+                    <Sparkles className="h-3.5 w-3.5" /> Recomendação Especialista
+                  </div>
+                  <p className="text-base font-semibold text-foreground">{videoFormatRecommendation.recommended_format_label}</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xl leading-relaxed">{videoFormatRecommendation.rationale}</p>
+                </div>
+                <Button
+                  type="button"
+                  className="rounded-xl shrink-0 bg-google-blue text-white hover:bg-google-blue/90 shadow-md"
+                  onClick={() => setExtraFieldValue(field.key, videoFormatRecommendation.recommended_format_id)}
+                >
+                  Aplicar Sugestão
+                </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="ml-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {field.options.map((option) => {
             const isActive = currentValue === option.value;
             const isRecommended = field.aiRecommended && videoFormatRecommendation?.recommended_format_id === option.value;
@@ -410,31 +510,24 @@ function ThemeModal({
                 key={option.value}
                 type="button"
                 onClick={() => setExtraFieldValue(field.key, option.value)}
-                className={`group rounded-2xl border p-4 text-left transition-all ${
+                className={`group relative text-left p-4 rounded-2xl border transition-all duration-200 ${
                   isActive
-                    ? "border-google-blue bg-google-blue/8 shadow-sm"
-                    : "border-border/70 bg-card hover:border-google-blue/30 hover:bg-google-blue/5"
+                    ? "border-google-blue bg-google-blue/5 shadow-sm ring-1 ring-google-blue/20"
+                    : "border-border/60 bg-card hover:border-google-blue/30 hover:bg-google-blue/5"
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">{option.label}</div>
-                    {isRecommended ? (
-                      <div className="mt-2 inline-flex items-center rounded-full border border-google-blue/20 bg-google-blue/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-google-blue">
-                        Recomendado pela IA
-                      </div>
-                    ) : null}
+                {isRecommended && !isActive && (
+                  <div className="absolute -top-2 -right-2 bg-google-blue text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shadow-sm">
+                    Recomendado
                   </div>
-
-                  <div
-                    className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                      isActive
-                        ? "border-google-blue bg-google-blue text-white"
-                        : "border-border bg-background text-transparent group-hover:border-google-blue/40"
-                    }`}
-                  >
-                    ✓
-                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-sm font-medium ${isActive ? 'text-google-blue' : 'text-foreground/90'}`}>
+                    {option.label}
+                  </span>
+                  <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
+                    isActive ? "border-google-blue bg-google-blue text-white" : "border-border bg-background text-transparent group-hover:border-google-blue/30"
+                  }`}>✓</div>
                 </div>
               </button>
             );
@@ -446,204 +539,77 @@ function ThemeModal({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-start justify-center bg-background/80 px-4 pb-6 pt-[4vh] backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-border bg-card shadow-2xl"
+        className="flex w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-border/70 bg-card shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-border/60 bg-gradient-to-br from-google-blue/[0.08] via-transparent to-transparent p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="max-w-2xl">
-              <div className="mb-3 inline-flex items-center rounded-full border border-google-blue/15 bg-google-blue/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-google-blue">
-                Fluxo guiado
-              </div>
-              <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-                {taskTitle}
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-border/50 bg-background/50">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                 <Wand2 className="h-6 w-6 text-google-blue" />
+                 {task.title}
               </h2>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-                {task.description ||
-                  "A IA vai usar o núcleo da empresa, o contexto informado e as instruções estratégicas para montar a entrega final."}
+              <p className="mt-1 text-sm text-muted-foreground">
+                {task.description || "Configure os detalhes para gerar o conteúdo com a sua identidade."}
               </p>
             </div>
-
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-background/80" onClick={onClose}>
+            <Button variant="ghost" size="icon" className="rounded-full bg-muted/50 hover:bg-muted shrink-0" onClick={onClose}>
               <X className="h-5 w-5" />
             </Button>
           </div>
-
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            {stepItems.map((step) => (
-              <div key={step.number} className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-google-blue/10 text-xs font-bold text-google-blue">
-                    {step.number}
-                  </span>
-                  <span className="text-sm font-semibold text-foreground">{step.title}</span>
+          
+          {/* Progress Bar Dinâmica */}
+          {totalSteps > 1 && (
+            <div className="flex items-center gap-2 mt-2">
+              {Array.from({ length: totalSteps }).map((_, i) => (
+                <div key={i} className="h-1.5 flex-1 rounded-full overflow-hidden bg-muted">
+                  <div className={`h-full bg-google-blue transition-all duration-500 ${currentStep >= i + 1 ? 'w-full' : 'w-0'}`} />
                 </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">{step.detail}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto bg-background/30 p-6 sm:p-8">
-          <div className="space-y-3 rounded-[1.75rem] border border-border/70 bg-background/60 p-5">
-            <label className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {inputLabel}
-            </label>
-
-            {isTextareaMode ? (
-              <Textarea
-                value={customTheme}
-                onChange={(e) => setCustomTheme(e.target.value)}
-                placeholder={inputPlaceholder}
-                className="min-h-[180px] rounded-2xl shadow-sm"
-              />
-            ) : (
-              <Input
-                value={customTheme}
-                onChange={(e) => setCustomTheme(e.target.value)}
-                placeholder={inputPlaceholder}
-                className="h-12 rounded-2xl shadow-sm"
-              />
-            )}
-
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {isInstagramCaptionTask
-                ? "A legenda será montada cruzando tema, formato do conteúdo, objetivo da peça e o núcleo da empresa."
-                : isInstagramScriptTask
-                  ? "O roteiro só começa a ser gerado quando você clicar em gerar roteiro. Antes disso, você pode escolher ou deixar a IA sugerir o melhor formato."
-                  : "Tudo o que você preencher aqui entra no contexto da geração final."}
-            </p>
-          </div>
-
-          {task.extraFields && task.extraFields.length > 0 ? (
-            <div className="space-y-4">
-              {task.extraFields.map((field) => renderOptionField(field))}
-            </div>
-          ) : null}
-
-          {showAiSuggestions ? (
-            <div className="space-y-4 rounded-[1.75rem] border border-border/70 bg-background/60 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Sugestões estratégicas de tema</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Clique para preencher o campo. O tema escolhido não executa nada sozinho.
-                  </p>
-                </div>
-
-                {suggestedThemes.length === 0 && !isFetchingThemes ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl border-dashed"
-                    onClick={onGenerateThemes}
-                  >
-                    <Sparkles className="mr-2 h-4 w-4 text-google-blue" />
-                    Gerar 5 temas com IA
-                  </Button>
-                ) : null}
-              </div>
-
-              {isFetchingThemes ? (
-                <div className="flex flex-col items-center justify-center gap-4 py-8">
-                  <Loader2 className="h-10 w-10 animate-spin text-google-blue" />
-                  <p className="text-sm font-medium text-muted-foreground">
-                    A IA está analisando o núcleo e montando temas mais fortes para esse contexto...
-                  </p>
-                </div>
-              ) : suggestedThemes.length > 0 ? (
-                <div className="grid gap-3">
-                  {suggestedThemes.map((theme, idx) => {
-                    const isSelected = customTheme.trim() === theme.trim();
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setCustomTheme(theme)}
-                        className={`rounded-2xl border p-4 text-left transition-all ${
-                          isSelected
-                            ? "border-google-blue bg-google-blue/8 shadow-sm"
-                            : "border-border/70 bg-card hover:border-google-blue/30 hover:bg-google-blue/5"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <ArrowRight className={`mt-0.5 h-4 w-4 shrink-0 ${isSelected ? "text-google-blue" : "text-muted-foreground"}`} />
-                            <div>
-                              <p className="text-sm font-medium leading-relaxed text-foreground">{theme}</p>
-                              <p className="mt-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                                {isSelected ? "Tema selecionado" : "Clique para usar este tema"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div
-                            className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                              isSelected ? "border-google-blue bg-google-blue text-white" : "border-border bg-background text-transparent"
-                            }`}
-                          >
-                            ✓
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="border-t border-border/60 bg-card/95 p-5 backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-foreground">Resumo da execução</p>
-              <div className="flex flex-wrap gap-2">
-                {customTheme.trim() ? (
-                  <span className="rounded-full border border-google-blue/20 bg-google-blue/10 px-3 py-1.5 text-xs font-medium text-foreground">
-                    Tema: {customTheme.trim()}
-                  </span>
-                ) : null}
-
-                {task.extraFields?.map((field) => {
-                  const selectedOption = field.options.find((option) => option.value === extraFieldValues[field.key]);
-                  if (!selectedOption) return null;
-                  return (
-                    <span
-                      key={field.key}
-                      className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-xs font-medium text-foreground/90"
-                    >
-                      {field.label}: {selectedOption.label}
-                    </span>
-                  );
-                })}
-              </div>
-
-              {missingFields.length > 0 ? (
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  Falta preencher: {missingFields.map((field) => field.label).join(", ")}.
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button variant="outline" className="rounded-xl" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button
-                variant="accent"
-                className="rounded-xl px-6"
-                disabled={!canSubmit}
-                onClick={() => onExecute(customTheme)}
+        {/* Body Wizard Dinâmico */}
+        <div className="relative overflow-hidden bg-background/30 min-h-[380px] max-h-[60vh] overflow-y-auto custom-scrollbar">
+          <AnimatePresence initial={false} custom={direction} mode="wait">
+             <motion.div
+                key={`step-${currentStep}`}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="absolute inset-0 p-6 sm:p-8 overflow-y-auto custom-scrollbar"
               >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {submitLabel}
-              </Button>
-            </div>
+                {currentStep === 1 ? renderStep1() : renderExtraFieldStep(task.extraFields![currentStep - 2], currentStep)}
+              </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border/50 bg-background/80 p-5 backdrop-blur-md flex items-center justify-between gap-4">
+          <Button variant="ghost" className="rounded-xl px-4" onClick={currentStep > 1 ? handleBack : onClose}>
+             {currentStep > 1 ? <><ChevronLeft className="mr-2 h-4 w-4" /> Voltar</> : "Cancelar"}
+          </Button>
+          
+          <div className="flex items-center gap-3">
+             {currentStep < totalSteps ? (
+               <Button variant="accent" className="rounded-xl px-6" disabled={!currentCanGoNext} onClick={handleNext}>
+                 Próximo Passo <ChevronRight className="ml-2 h-4 w-4" />
+               </Button>
+             ) : (
+               <Button variant="accent" className="rounded-xl px-8 shadow-md" disabled={!canSubmit} onClick={() => onExecute(customTheme)}>
+                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4 fill-current" />}
+                 {task.submitLabel || "Gerar Conteúdo"}
+               </Button>
+             )}
           </div>
         </div>
       </div>
@@ -985,7 +951,6 @@ export default function AuthorityAgentRunPage() {
     }
   }
 
-
   async function loadFacebookStatus() {
     const status = await facebookService.status();
     let parsedPages: FacebookPage[] = [];
@@ -1060,7 +1025,6 @@ export default function AuthorityAgentRunPage() {
     }
   }
 
-
   async function handleYouTubeClick() {
     if (isPublishing) return;
     if (user?.has_youtube) {
@@ -1102,7 +1066,6 @@ export default function AuthorityAgentRunPage() {
       setIsPublishing(false);
     }
   }
-
 
   async function handleTikTokClick() {
     if (isPublishing) return;
@@ -1156,7 +1119,6 @@ export default function AuthorityAgentRunPage() {
       setIsPublishing(false);
     }
   }
-
 
   async function handleGoogleBusinessClick() {
     if (isPublishing) return;
@@ -1244,7 +1206,6 @@ export default function AuthorityAgentRunPage() {
         pages={facebookPages}
         selectedPageId={facebookSelectedPageId}
       />
-
 
       <GoogleBusinessApplyModal
         isOpen={isGoogleBusinessModalOpen}

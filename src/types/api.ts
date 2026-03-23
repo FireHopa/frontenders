@@ -156,6 +156,29 @@ export interface BusinessCoreIn {
   knowledge_files_json?: string;
 }
 
+
+export interface SkyBobCatalogItem {
+  id: string;
+  name: string;
+  kind: string;
+  rationale: string;
+  study: string;
+  pains: string[];
+  desires: string[];
+  objections: string[];
+  messaging_angles: string[];
+  evidence: string[];
+}
+
+export interface SkyBobCatalogAnalysis {
+  analysis_id: string;
+  generated_at: string;
+  model_used: string;
+  summary: string;
+  detected_items: SkyBobCatalogItem[];
+  serialized_text: string;
+}
+
 export interface SkyBobHook {
   id: string;
   hook: string;
@@ -182,6 +205,10 @@ export interface SkyBobCard {
 }
 
 export interface SkyBobRunResponse {
+  run_id: string;
+  mode: "full" | "refine";
+  model_used: string;
+  generated_at: string;
   overview: string;
   success_patterns: string[];
   mistakes: string[];
@@ -190,6 +217,7 @@ export interface SkyBobRunResponse {
   hook_strategy: SkyBobHookStrategy;
   hooks: SkyBobHook[];
   cards: SkyBobCard[];
+  catalog_analysis?: SkyBobCatalogAnalysis | null;
   serialized_text: string;
 }
 

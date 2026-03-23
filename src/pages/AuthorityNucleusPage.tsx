@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toastApiError, toastSuccess } from "@/lib/toast";
+import { parseSkyBobWorkspace } from "@/lib/skybob";
 import { cn } from "@/lib/utils";
 import { KnowledgeUploader } from "@/components/robot/KnowledgeUploader";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +39,16 @@ const CORE_GROUPS = [
 ];
 
 const STORAGE_KEY = "ori_authority_nucleus_v1";
+
+function getSkyBobDisplayValue(value: string): string {
+  const parsed = parseSkyBobWorkspace(value);
+  if (!parsed) return value;
+  return parsed.study?.serialized_text || parsed.catalog_analysis?.serialized_text || value;
+}
+
+function isStructuredSkyBobValue(value: string): boolean {
+  return Boolean(parseSkyBobWorkspace(value));
+}
 
 export default function AuthorityNucleusPage() {
   const [draft, setDraft] = React.useState<Record<string, string>>(() => {
@@ -116,12 +127,25 @@ export default function AuthorityNucleusPage() {
                           placeholder={`Digite ${f.label.toLowerCase()}...`}
                         />
                       ) : (
-                        <Textarea
-                          value={draft[f.key] || ""}
-                          onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                          className="rounded-xl min-h-[120px] p-4 shadow-sm bg-background border-border/60 focus:ring-google-blue focus:border-google-blue transition-all resize-y leading-relaxed"
-                          placeholder={`Descreva os detalhes de ${f.label.toLowerCase()} aqui...`}
-                        />
+                        <>
+                          <Textarea
+                            value={f.key === "skybob" ? getSkyBobDisplayValue(draft[f.key] || "") : (draft[f.key] || "")}
+                            onChange={(e) => {
+                              if (f.key === "skybob" && isStructuredSkyBobValue(draft[f.key] || "")) {
+                                return;
+                              }
+                              setDraft((d) => ({ ...d, [f.key]: e.target.value }));
+                            }}
+                            readOnly={f.key === "skybob" && isStructuredSkyBobValue(draft[f.key] || "")}
+                            className="rounded-xl min-h-[120px] p-4 shadow-sm bg-background border-border/60 focus:ring-google-blue focus:border-google-blue transition-all resize-y leading-relaxed"
+                            placeholder={`Descreva os detalhes de ${f.label.toLowerCase()} aqui...`}
+                          />
+                          {f.key === "skybob" && isStructuredSkyBobValue(draft[f.key] || "") ? (
+                            <p className="text-xs text-muted-foreground">
+                              O campo SkyBob agora guarda estrutura completa de feedback e edições. A edição deve ser feita na tela do SkyBob.
+                            </p>
+                          ) : null}
+                        </>
                       )}
                     </div>
                   ))}
