@@ -1,92 +1,126 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   ChevronRight,
   Database,
-  Edit3,
   Layers3,
   Lightbulb,
+  Lock,
   RefreshCw,
   Rocket,
-  Save,
   Sparkles,
-  Target,
   ThumbsDown,
   ThumbsUp,
-  Wand2,
-  XCircle,
+  Target,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { buildSkyBobFeedbackPreferences, buildSkyBobNucleusSignature, createEmptySkyBobWorkspace, parseSkyBobWorkspace, serializeSkyBobWorkspace, withWorkspaceTimestamp, type SkyBobFeedbackItem, type SkyBobWorkspace, type VoteValue } from "@/lib/skybob";
 import { toastApiError, toastInfo, toastSuccess } from "@/lib/toast";
-import {
-  buildSkyBobFeedbackPreferences,
-  buildSkyBobNucleusSignature,
-  createEmptySkyBobWorkspace,
-  parseSkyBobWorkspace,
-  serializeSkyBobWorkspace,
-  withWorkspaceTimestamp,
-  type SkyBobFeedbackItem,
-  type SkyBobWorkspace,
-  type VoteValue,
-} from "@/lib/skybob";
 import { api } from "@/services/robots";
-import type { BusinessCoreOut, SkyBobCard, SkyBobCatalogItem, SkyBobHook, SkyBobRunResponse } from "@/types/api";
+import type { BusinessCoreOut, SkyBobCard, SkyBobCatalogAnalysis, SkyBobCatalogItem, SkyBobHook, SkyBobRunResponse } from "@/types/api";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/state/authStore";
 
-const STORAGE_KEY = "ori_authority_nucleus_v1";
+const BUSINESS_CORE_PUBLIC_ID = "business-core";
+const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
 
-function loadNucleus(): Record<string, unknown> {
+const LOCAL_NUCLEUS_FIELDS = [
+  "company_name",
+  "owner_name",
+  "city_state",
+  "service_area",
+  "main_audience",
+  "services_products",
+  "real_differentials",
+  "restrictions",
+  "reviews",
+  "testimonials",
+  "usable_links_texts",
+  "forbidden_content",
+  "site",
+  "google_business_profile",
+  "instagram",
+  "linkedin",
+  "youtube",
+  "tiktok",
+] as const;
+
+function sanitizeNucleusForLocalStorage(input: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = {};
+  LOCAL_NUCLEUS_FIELDS.forEach((field) => {
+    if (field in input) {
+      next[field] = input[field];
+    }
+  });
+  return next;
+}
+
+function trySaveNucleus(storageKey: string, next: Record<string, unknown>) {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") as Record<string, unknown>;
-  } catch {
-    return {};
+    localStorage.setItem(storageKey, JSON.stringify(sanitizeNucleusForLocalStorage(next)));
+    return true;
+  } catch (error) {
+    console.warn("Não consegui salvar o núcleo localmente.", error);
+    return false;
   }
 }
 
-function saveNucleus(next: Record<string, unknown>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+function buildScopedStorageKey(userEmail?: string | null): string {
+  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
+  return `${STORAGE_KEY_PREFIX}:${normalized}`;
+}
+const NUCLEUS_FIELDS = [
+  "company_name",
+  "owner_name",
+  "city_state",
+  "service_area",
+  "main_audience",
+  "services_products",
+  "real_differentials",
+  "restrictions",
+  "reviews",
+  "testimonials",
+  "usable_links_texts",
+  "forbidden_content",
+  "site",
+  "google_business_profile",
+  "instagram",
+  "linkedin",
+  "youtube",
+  "tiktok",
+] as const;
+
+function loadNucleus(storageKey: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}") as Record<string, unknown>;
+    return sanitizeNucleusForLocalStorage(parsed);
+  } catch {
+    return {};
+  }
 }
 
 function ensureString(value: unknown): string {
   return String(value ?? "");
 }
 
-function splitLines(value: string): string[] {
-  return value
-    .split(/\n/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function splitComma(value: string): string[] {
-  return value
-    .split(/[,;|]/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function formatNowIso(): string {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function normalizeNucleus(coreData?: BusinessCoreOut | null): Record<string, unknown> {
-  if (!coreData) return loadNucleus();
-  const merged = { ...loadNucleus(), ...coreData };
-  saveNucleus(merged);
+function normalizeNucleus(storageKey: string, coreData?: BusinessCoreOut | null): Record<string, unknown> {
+  const local = loadNucleus(storageKey);
+  if (!coreData) return local;
+  const merged = { ...local, ...sanitizeNucleusForLocalStorage(coreData as Record<string, unknown>) };
+  trySaveNucleus(storageKey, merged);
   return merged;
-}
-
-function resolveHook(workspace: SkyBobWorkspace, hook: SkyBobHook): SkyBobHook {
-  return workspace.hooks_feedback[hook.id]?.item ?? hook;
-}
-
-function resolveCard(workspace: SkyBobWorkspace, card: SkyBobCard): SkyBobCard {
-  return workspace.cards_feedback[card.id]?.item ?? card;
 }
 
 function createHookFeedbackItem(item: SkyBobHook): SkyBobFeedbackItem<SkyBobHook> {
@@ -95,93 +129,152 @@ function createHookFeedbackItem(item: SkyBobHook): SkyBobFeedbackItem<SkyBobHook
     item,
     status: null,
     notes: "",
-    updated_at: formatNowIso(),
+    updated_at: nowIso(),
   };
 }
 
-function createCardFeedbackItem(item: SkyBobCard): SkyBobFeedbackItem<SkyBobCard> {
-  return {
-    id: item.id,
-    item,
-    status: null,
-    notes: "",
-    updated_at: formatNowIso(),
-  };
+function formatDateTime(value?: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
 }
 
-function sortFeedbackByDate<T extends SkyBobHook | SkyBobCard>(entries: SkyBobFeedbackItem<T>[]) {
-  return [...entries].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+function countFilledNucleusFields(nucleus: Record<string, unknown>): number {
+  return NUCLEUS_FIELDS.filter((field) => {
+    const value = ensureString(nucleus[field]).trim();
+    return value && value.toLowerCase() !== "não informado";
+  }).length;
 }
 
-function statusBadgeVariant(status: VoteValue): "green" | "red" | "outline" {
-  if (status === "like") return "green";
-  if (status === "dislike") return "red";
-  return "outline";
-}
-
-function statusLabel(status: VoteValue): string {
-  if (status === "like") return "Gostei";
-  if (status === "dislike") return "Não gostei";
-  return "Sem feedback";
-}
-
-function RocketHero() {
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
-    <div className="relative overflow-hidden rounded-[32px] border border-cyan-400/20 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.20),transparent_40%),linear-gradient(180deg,rgba(8,11,20,0.94),rgba(8,11,20,1))] min-h-[360px]">
-      <div
-        className="absolute inset-0 opacity-60"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }}
-      />
-      <motion.div
-        className="absolute right-6 top-10 hidden md:block"
-        animate={{ y: [0, -10, 0] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <Rocket className="h-28 w-28 text-cyan-200 drop-shadow-[0_0_36px_rgba(0,200,232,0.35)]" />
-      </motion.div>
-
-      <div className="relative p-8 md:p-10">
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">
-          <Sparkles className="h-4 w-4" />
-          SkyBob
-        </div>
-        <h1 className="mt-5 max-w-4xl text-4xl font-black tracking-tight md:text-6xl">Estudo editorial + Hook Lab treinável com memória persistida.</h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
-          Agora o SkyBob faz uma pré-análise do catálogo antes de rodar, executa em GPT-5.4, refina só hooks/cards quando você pede e mantém feedbacks/edições salvos no núcleo da empresa.
-        </p>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+        active
+          ? "border-cyan-300/40 bg-cyan-400/12 text-white shadow-soft"
+          : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
-function StatCard({
-  icon,
+function BulletList({
   title,
-  value,
-  description,
+  items,
+  tone = "neutral",
 }: {
-  icon: React.ReactNode;
   title: string;
-  value: string | number;
-  description: string;
+  items: string[];
+  tone?: "neutral" | "success" | "warning";
 }) {
+  const accent =
+    tone === "success"
+      ? "text-emerald-200 border-emerald-400/20 bg-emerald-400/[0.06]"
+      : tone === "warning"
+        ? "text-amber-100 border-amber-400/20 bg-amber-400/[0.06]"
+        : "text-slate-100 border-white/10 bg-white/[0.03]";
+
   return (
-    <Card className="border-cyan-400/14 bg-white/[0.03]">
-      <CardContent className="p-5">
-        <div className="mb-2 inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 p-2 text-cyan-200">{icon}</div>
-        <div className="text-sm text-slate-400">{title}</div>
-        <div className="mt-2 text-3xl font-black">{value}</div>
-        <div className="mt-2 text-xs leading-5 text-slate-400">{description}</div>
+    <Card className="border-white/10 bg-white/[0.02]">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-xl">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.length ? (
+          items.map((item, index) => (
+            <div key={`${item}-${index}`} className={cn("flex items-start gap-3 rounded-2xl border p-4 text-sm leading-6", accent)}>
+              <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-cyan-300" />
+              <span>{item}</span>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-400">
+            Sem itens nesta seção.
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function HookLabCard({
+function InsightCard({ card }: { card: SkyBobCard }) {
+  return (
+    <Card className="h-full border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(10,14,23,0.92))]">
+      <CardHeader className="pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">{card.section || "insight"}</Badge>
+          {card.badges.slice(0, 2).map((badge, index) => (
+            <Badge key={`${badge}-${index}`} variant="blue">
+              {badge}
+            </Badge>
+          ))}
+        </div>
+        <CardTitle className="text-xl leading-tight">{card.title}</CardTitle>
+        {card.body ? <CardDescription className="text-sm leading-6 text-slate-300">{card.body}</CardDescription> : null}
+      </CardHeader>
+      {card.bullets.length ? (
+        <CardContent className="space-y-3">
+          {card.bullets.map((bullet, index) => (
+            <div key={`${bullet}-${index}`} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-200">
+              <Sparkles className="mt-1 h-4 w-4 shrink-0 text-cyan-300" />
+              <span>{bullet}</span>
+            </div>
+          ))}
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
+function CatalogSignalCard({ item }: { item: SkyBobCatalogItem }) {
+  const chips = [...item.messaging_angles, ...item.pains, ...item.desires].filter(Boolean).slice(0, 4);
+
+  return (
+    <Card className="h-full border-white/10 bg-white/[0.02]">
+      <CardHeader className="pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="blue">{item.kind || "item"}</Badge>
+          <Badge variant="outline">{item.name}</Badge>
+        </div>
+        <CardTitle className="text-lg">{item.name}</CardTitle>
+        <CardDescription className="text-sm leading-6 text-slate-300">
+          {item.rationale || item.study || "Item detectado no núcleo da empresa."}
+        </CardDescription>
+      </CardHeader>
+      {chips.length ? (
+        <CardContent className="flex flex-wrap gap-2 pt-0">
+          {chips.map((chip, index) => (
+            <Badge key={`${chip}-${index}`} variant="outline" className="max-w-full break-words">
+              {chip}
+            </Badge>
+          ))}
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
+function HookOptionCard({
   hook,
   vote,
   onVote,
@@ -191,267 +284,505 @@ function HookLabCard({
   onVote: (hook: SkyBobHook, value: VoteValue) => void;
 }) {
   return (
-    <Card className="h-full border-cyan-400/20 bg-[linear-gradient(180deg,rgba(13,20,34,0.96),rgba(8,11,20,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-      <CardHeader className="space-y-4">
+    <Card className="h-full border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(10,14,23,0.92))]">
+      <CardHeader className="gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="blue">{hook.angle || "hook"}</Badge>
-          <Badge variant="outline">{hook.format_hint || "Formato não informado"}</Badge>
-          <Badge variant={statusBadgeVariant(vote)}>{statusLabel(vote)}</Badge>
+          <Badge variant="blue">{hook.format_hint || "Formato livre"}</Badge>
+          {vote === "like" ? <Badge variant="green">Gostei</Badge> : null}
+          {vote === "dislike" ? <Badge variant="red">Não gostei</Badge> : null}
         </div>
-        <CardTitle className="text-xl leading-tight">{hook.hook}</CardTitle>
-        <CardDescription className="text-sm leading-6 text-slate-300">{hook.why_it_matches || "Hook alinhado ao posicionamento atual do negócio."}</CardDescription>
+        <CardTitle className="text-[1.15rem] leading-7">{hook.hook}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-5">
-        {hook.use_case ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-200">Como usar</div>
-            <div className="text-sm leading-6 text-slate-200">{hook.use_case}</div>
-          </div>
-        ) : null}
-
-        {hook.tags.length ? (
-          <div className="flex flex-wrap gap-2">
-            {hook.tags.map((tag) => (
-              <Badge key={`${hook.id}-${tag}`} variant="outline">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <Button variant={vote === "like" ? "default" : "outline"} size="sm" onClick={() => onVote(hook, vote === "like" ? null : "like")}>
-            <ThumbsUp className="h-4 w-4" />
-            Gostei
-          </Button>
-          <Button variant={vote === "dislike" ? "destructive" : "outline"} size="sm" onClick={() => onVote(hook, vote === "dislike" ? null : "dislike")}>
-            <ThumbsDown className="h-4 w-4" />
-            Não gostei
-          </Button>
-          <span className="text-xs text-slate-400">Esse feedback entra no próximo refinamento.</span>
-        </div>
+      <CardContent className="flex flex-wrap gap-3 pt-0">
+        <Button
+          variant={vote === "like" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onVote(hook, vote === "like" ? null : "like")}
+        >
+          <ThumbsUp className="h-4 w-4" />
+          Gostei
+        </Button>
+        <Button
+          variant={vote === "dislike" ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => onVote(hook, vote === "dislike" ? null : "dislike")}
+        >
+          <ThumbsDown className="h-4 w-4" />
+          Não gostei
+        </Button>
       </CardContent>
     </Card>
   );
 }
 
-function StudyCard({
-  card,
-  vote,
-  onVote,
-}: {
-  card: SkyBobCard;
-  vote: VoteValue;
-  onVote: (card: SkyBobCard, value: VoteValue) => void;
-}) {
+function RocketMark() {
   return (
-    <Card className="h-full border-cyan-400/15 bg-[linear-gradient(180deg,rgba(17,24,39,0.95),rgba(8,11,20,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-      <CardHeader className="space-y-4 pb-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="blue">{card.section}</Badge>
-            <Badge variant={statusBadgeVariant(vote)}>{statusLabel(vote)}</Badge>
-          </div>
-          <CardTitle className="text-xl leading-tight">{card.title}</CardTitle>
-        </div>
-        <CardDescription className="text-sm leading-6 text-slate-300">{card.body}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        {card.badges.length ? (
-          <div className="flex flex-wrap gap-2">
-            {card.badges.map((badge) => (
-              <Badge key={`${card.id}-${badge}`} variant="outline">
-                {badge}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
+    <div className="relative h-24 w-24">
+      <div className="absolute inset-0 rounded-full bg-cyan-400/10 blur-2xl" />
+      <div className="absolute inset-0 rounded-full border border-cyan-300/20 bg-[radial-gradient(circle_at_30%_30%,rgba(77,232,255,0.25),transparent_55%)]" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Rocket className="h-12 w-12 text-cyan-200" />
+      </div>
+    </div>
+  );
+}
 
-        {card.bullets.length ? (
-          <div className="space-y-2">
-            {card.bullets.map((bullet) => (
-              <div key={bullet} className="flex items-start gap-2 text-sm leading-6 text-slate-200">
-                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-cyan-300" />
-                <span>{bullet}</span>
+function SpaceRunCard({
+  progress,
+  label,
+  title,
+  description,
+}: {
+  progress: number;
+  label: string;
+  title: string;
+  description: string;
+}) {
+  const stars = React.useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, index) => ({
+        id: index,
+        left: `${(index * 17) % 97}%`,
+        top: `${(index * 13) % 88}%`,
+        scale: 0.7 + ((index % 4) * 0.18),
+        delay: (index % 6) * 0.2,
+      })),
+    []
+  );
+
+  const asteroids = React.useMemo(
+    () => [
+      { id: "a1", size: 24, left: "18%", top: "24%", duration: 7.2 },
+      { id: "a2", size: 16, left: "56%", top: "18%", duration: 6.2 },
+      { id: "a3", size: 34, left: "74%", top: "52%", duration: 8.1 },
+      { id: "a4", size: 22, left: "32%", top: "66%", duration: 7.6 },
+    ],
+    []
+  );
+
+  return (
+    <Card className="overflow-hidden border-cyan-400/20 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.16),transparent_38%),linear-gradient(180deg,rgba(8,11,20,0.96),rgba(8,11,20,1))]">
+      <CardContent className="grid gap-8 p-6 md:p-8 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="flex flex-col justify-between gap-6">
+          <div className="space-y-4">
+            <Badge variant="blue" className="w-fit">
+              SkyBob em execução
+            </Badge>
+            <div className="space-y-3">
+              <h1 className="text-3xl font-black tracking-tight md:text-4xl">{title}</h1>
+              <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">{description}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm text-slate-300">
+              <span>{label}</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-white/[0.06]">
+              <motion.div
+                className="h-full rounded-full bg-[linear-gradient(90deg,#00C8E8,#4DE8FF)]"
+                animate={{ width: `${Math.max(6, Math.min(progress, 100))}%` }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+              />
+            </div>
+            <div className="text-xs uppercase tracking-[0.22em] text-cyan-200">
+              Lendo o núcleo, organizando o nicho e preparando a entrega visual.
+            </div>
+          </div>
+        </div>
+
+        <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_50%_30%,rgba(77,232,255,0.14),transparent_45%),linear-gradient(180deg,rgba(4,8,16,0.92),rgba(6,9,18,1))]">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:36px_36px]" />
+
+          {stars.map((star) => (
+            <motion.span
+              key={star.id}
+              className="absolute rounded-full bg-white/90"
+              style={{ left: star.left, top: star.top, width: 2.5 * star.scale, height: 2.5 * star.scale }}
+              animate={{ opacity: [0.25, 0.9, 0.35], scale: [1, 1.4, 1] }}
+              transition={{ duration: 1.9, repeat: Infinity, delay: star.delay, ease: "easeInOut" }}
+            />
+          ))}
+
+          {asteroids.map((asteroid, index) => (
+            <motion.div
+              key={asteroid.id}
+              className="absolute rounded-full border border-white/10 bg-[linear-gradient(180deg,rgba(148,163,184,0.35),rgba(71,85,105,0.3))] shadow-[0_0_30px_rgba(15,23,42,0.25)]"
+              style={{ width: asteroid.size, height: asteroid.size, left: asteroid.left, top: asteroid.top }}
+              animate={{ y: [0, index % 2 === 0 ? -14 : 12, 0], rotate: [0, 12, -8, 0] }}
+              transition={{ duration: asteroid.duration, repeat: Infinity, ease: "easeInOut" }}
+            />
+          ))}
+
+          <motion.div
+            className="absolute left-[-12%] top-[52%] h-px w-[140%] bg-[linear-gradient(90deg,transparent,rgba(77,232,255,0.35),transparent)]"
+            animate={{ opacity: [0.2, 0.9, 0.2] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          <motion.div
+            className="absolute left-[-8%] top-[54%]"
+            animate={{ x: ["0%", "122%"], y: [0, -32, 12, -18, 0], rotate: [-12, -4, 6, -8] }}
+            transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <div className="relative">
+              <div className="absolute left-[-48px] top-1/2 h-3 w-16 -translate-y-1/2 rounded-full bg-cyan-300/35 blur-xl" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-cyan-300/20 bg-[radial-gradient(circle_at_35%_35%,rgba(77,232,255,0.24),transparent_58%)]">
+                <Rocket className="h-10 w-10 text-cyan-100" />
               </div>
+            </div>
+          </motion.div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function IntroScreen({
+  canStart,
+  filledCount,
+  onStart,
+}: {
+  canStart: boolean;
+  filledCount: number;
+  onStart: () => void;
+}) {
+  return (
+    <Card className="overflow-hidden border-cyan-400/20 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.18),transparent_36%),linear-gradient(180deg,rgba(8,11,20,0.96),rgba(8,11,20,1))]">
+      <CardContent className="flex min-h-[calc(100dvh-13rem)] items-center justify-center p-6 md:p-10">
+        <div className="grid w-full max-w-5xl gap-10 xl:grid-cols-[0.9fr_1.1fr] xl:items-center">
+          <div className="flex justify-center xl:justify-start">
+            <div className="relative flex h-[340px] w-[340px] items-center justify-center overflow-hidden rounded-[40px] border border-white/10 bg-[radial-gradient(circle_at_50%_40%,rgba(77,232,255,0.16),transparent_40%),linear-gradient(180deg,rgba(7,12,22,0.92),rgba(6,9,18,1))]">
+              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:32px_32px]" />
+              <motion.div
+                className="absolute h-56 w-56 rounded-full border border-cyan-300/10"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.div
+                className="absolute h-72 w-72 rounded-full border border-white/5"
+                animate={{ rotate: -360 }}
+                transition={{ duration: 36, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.div
+                animate={{ y: [0, -8, 0], rotate: [-6, 4, -6] }}
+                transition={{ duration: 4.4, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <RocketMark />
+              </motion.div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <Badge variant="blue" className="w-fit">
+                SkyBob
+              </Badge>
+              <h1 className="text-4xl font-black tracking-tight md:text-5xl">Seu estudo fixo do nicho, gerado a partir do núcleo da empresa.</h1>
+              <p className="max-w-2xl text-base leading-8 text-slate-300">
+                O SkyBob lê o núcleo da empresa, organiza os sinais do nicho e entrega uma leitura estratégica clara para orientar conteúdo, posicionamento e Hook Lab.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="mb-3 flex items-center gap-2 text-cyan-200">
+                  <Database className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em]">Fonte</span>
+                </div>
+                <div className="text-sm leading-6 text-slate-300">Usa os dados do núcleo da empresa. Não é um formulário solto.</div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="mb-3 flex items-center gap-2 text-cyan-200">
+                  <Target className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em]">Entrega</span>
+                </div>
+                <div className="text-sm leading-6 text-slate-300">Mostra o estudo do nicho de forma organizada e separa isso do Hook Lab.</div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="mb-3 flex items-center gap-2 text-cyan-200">
+                  <Lock className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em]">Persistência</span>
+                </div>
+                <div className="text-sm leading-6 text-slate-300">Depois de gerado, o estudo fica salvo no núcleo da empresa como referência fixa.</div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Button size="lg" onClick={onStart} disabled={!canStart} className="min-w-[220px]">
+                <Rocket className="h-5 w-5" />
+                Iniciar SkyBob
+              </Button>
+              <div className="text-sm text-slate-400">
+                {canStart ? (
+                  <>Campos úteis preenchidos no núcleo: <span className="font-semibold text-slate-200">{filledCount}</span></>
+                ) : (
+                  <>Preencha o núcleo da empresa antes de iniciar o SkyBob.</>
+                )}
+              </div>
+            </div>
+
+            {!canStart ? (
+              <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5 text-sm leading-6 text-amber-100">
+                O SkyBob depende do núcleo da empresa para funcionar. Preencha as informações principais e volte para iniciar.
+                <div className="mt-4">
+                  <Button asChild variant="outline">
+                    <Link to="/authority-agents/nucleus">Abrir Núcleo da Empresa</Link>
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StudyView({
+  study,
+  catalogAnalysis,
+  likedHooksCount,
+}: {
+  study: SkyBobRunResponse;
+  catalogAnalysis: SkyBobCatalogAnalysis | null;
+  likedHooksCount: number;
+}) {
+  const catalogItems = catalogAnalysis?.detected_items || [];
+  const insightCards = study.cards || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="border-cyan-400/16 bg-[linear-gradient(180deg,rgba(11,18,30,0.94),rgba(8,11,20,0.98))]">
+          <CardHeader className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="blue">Leitura do nicho</Badge>
+              <Badge variant="outline">{study.model_used}</Badge>
+            </div>
+            <CardTitle className="text-3xl leading-tight">O que o SkyBob entendeu sobre esse mercado</CardTitle>
+            <CardDescription className="text-base leading-8 text-slate-300">{study.overview}</CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card className="border-white/10 bg-white/[0.02]">
+          <CardHeader className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">Direção editorial</Badge>
+              <Badge variant="green">{likedHooksCount} hooks aprovados</Badge>
+            </div>
+            <CardTitle className="text-2xl">Como a IA quer posicionar a comunicação</CardTitle>
+            <CardDescription className="text-sm leading-7 text-slate-300">
+              {study.hook_strategy.positioning_summary}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-emerald-200">
+                <CheckCircle2 className="h-4 w-4" />
+                Priorizar
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {study.hook_strategy.preferred_angles.length ? study.hook_strategy.preferred_angles.map((item, index) => (
+                  <Badge key={`${item}-${index}`} variant="green">
+                    {item}
+                  </Badge>
+                )) : <span className="text-sm text-slate-300">Sem indicação específica.</span>}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-100">
+                <AlertTriangle className="h-4 w-4" />
+                Reduzir
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {study.hook_strategy.angles_to_reduce.length ? study.hook_strategy.angles_to_reduce.map((item, index) => (
+                  <Badge key={`${item}-${index}`} variant="yellow">
+                    {item}
+                  </Badge>
+                )) : <span className="text-sm text-slate-300">Nada crítico sinalizado.</span>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <BulletList title="Padrões que funcionam" items={study.success_patterns} tone="success" />
+        <BulletList title="Erros que enfraquecem a comunicação" items={study.mistakes} tone="warning" />
+        <BulletList title="Oportunidades para destacar a marca" items={study.opportunities} />
+      </div>
+
+      <Card className="border-white/10 bg-white/[0.02]">
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">Calendário editorial</Badge>
+            <Badge variant="blue">{study.calendar_recommendations.length} recomendações</Badge>
+          </div>
+          <CardTitle className="text-2xl">Próximos movimentos sugeridos</CardTitle>
+          <CardDescription className="text-sm leading-7 text-slate-300">
+            Sequências e direções para transformar o estudo em conteúdo publicável.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {study.calendar_recommendations.length ? study.calendar_recommendations.map((item, index) => (
+            <div key={`${item}-${index}`} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-200">
+              <CalendarDays className="mt-1 h-4 w-4 shrink-0 text-cyan-300" />
+              <span>{item}</span>
+            </div>
+          )) : (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-400">
+              Sem recomendações de calendário nesta execução.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {insightCards.length ? (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight">Destaques que a IA fez questão de enfatizar</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">Blocos estratégicos organizados para leitura rápida, sem misturar com o Hook Lab.</p>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {insightCards.map((card) => (
+              <InsightCard key={card.id} card={card} />
             ))}
           </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <Button variant={vote === "like" ? "default" : "outline"} size="sm" onClick={() => onVote(card, vote === "like" ? null : "like")}>
-            <ThumbsUp className="h-4 w-4" />
-            Gostei
-          </Button>
-          <Button variant={vote === "dislike" ? "destructive" : "outline"} size="sm" onClick={() => onVote(card, vote === "dislike" ? null : "dislike")}>
-            <ThumbsDown className="h-4 w-4" />
-            Não gostei
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+      ) : null}
+
+      <Card className="border-white/10 bg-white/[0.02]">
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">Núcleo interpretado</Badge>
+            <Badge variant="blue">{catalogItems.length} itens detectados</Badge>
+          </div>
+          <CardTitle className="text-2xl">O que o SkyBob identificou dentro da empresa</CardTitle>
+          <CardDescription className="text-sm leading-7 text-slate-300">
+            {catalogAnalysis?.summary || "Leitura resumida dos serviços, produtos e sinais do núcleo."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {catalogItems.length ? catalogItems.map((item) => (
+            <CatalogSignalCard key={item.id} item={item} />
+          )) : (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
+              Nenhum item foi detectado no catálogo desta execução.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function CatalogItemCard({ item }: { item: SkyBobCatalogItem }) {
-  return (
-    <Card className="border-cyan-400/16 bg-[linear-gradient(180deg,rgba(10,16,28,0.92),rgba(8,11,20,0.98))]">
-      <CardHeader className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="blue">{item.kind}</Badge>
-          <Badge variant="outline">{item.name}</Badge>
-        </div>
-        <CardDescription className="text-sm leading-6 text-slate-300">{item.rationale}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-200">{item.study}</div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Dores</div>
-            <div className="space-y-2 text-sm text-slate-200">
-              {item.pains.map((pain) => (
-                <div key={pain}>{pain}</div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Desejos</div>
-            <div className="space-y-2 text-sm text-slate-200">
-              {item.desires.map((desire) => (
-                <div key={desire}>{desire}</div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Objeções</div>
-            <div className="space-y-2 text-sm text-slate-200">
-              {item.objections.map((objection) => (
-                <div key={objection}>{objection}</div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Ângulos úteis</div>
-            <div className="space-y-2 text-sm text-slate-200">
-              {item.messaging_angles.map((angle) => (
-                <div key={angle}>{angle}</div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function HookFeedbackEditor({
-  entry,
+function HookLabView({
+  hooks,
+  likes,
+  dislikes,
+  canGenerate,
+  isGenerating,
   onVote,
-  onChange,
-  onNotesChange,
+  onGenerate,
+  generationLockedMessage,
 }: {
-  entry: SkyBobFeedbackItem<SkyBobHook>;
+  hooks: Array<SkyBobHook & { feedback: VoteValue }>;
+  likes: number;
+  dislikes: number;
+  canGenerate: boolean;
+  isGenerating: boolean;
   onVote: (hook: SkyBobHook, value: VoteValue) => void;
-  onChange: (hook: SkyBobHook, field: keyof SkyBobHook, value: string | string[]) => void;
-  onNotesChange: (hook: SkyBobHook, notes: string) => void;
+  onGenerate: () => void;
+  generationLockedMessage?: string | null;
 }) {
   return (
-    <Card className="border-white/10 bg-white/[0.03]">
-      <CardHeader className="space-y-3 pb-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={statusBadgeVariant(entry.status)}>{statusLabel(entry.status)}</Badge>
-          <Badge variant="outline">{entry.item.angle || "sem ângulo"}</Badge>
-          <Badge variant="outline">{entry.item.format_hint || "sem formato"}</Badge>
-        </div>
-        <CardTitle className="text-lg leading-tight">{entry.item.hook}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Input value={entry.item.hook} onChange={(event) => onChange(entry.item, "hook", event.target.value)} placeholder="Hook" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input value={entry.item.angle} onChange={(event) => onChange(entry.item, "angle", event.target.value)} placeholder="Ângulo" />
-          <Input value={entry.item.format_hint} onChange={(event) => onChange(entry.item, "format_hint", event.target.value)} placeholder="Formato" />
-        </div>
-        <Textarea value={entry.item.use_case} onChange={(event) => onChange(entry.item, "use_case", event.target.value)} placeholder="Como usar" />
-        <Textarea value={entry.item.why_it_matches} onChange={(event) => onChange(entry.item, "why_it_matches", event.target.value)} placeholder="Por que combina" />
-        <Input value={entry.item.tags.join(", ")} onChange={(event) => onChange(entry.item, "tags", splitComma(event.target.value))} placeholder="Tags separadas por vírgula" />
-        <Textarea value={entry.notes} onChange={(event) => onNotesChange(entry.item, event.target.value)} placeholder="Notas do feedback para o núcleo" />
+    <div className="space-y-6">
+      <Card className="border-cyan-400/16 bg-[linear-gradient(180deg,rgba(11,18,30,0.94),rgba(8,11,20,0.98))]">
+        <CardContent className="flex flex-col gap-5 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="blue">Hook Lab</Badge>
+              <Badge variant="outline">somente hook + formato de vídeo</Badge>
+              <Badge variant="outline">sem repetição nas novas rodadas</Badge>
+            </div>
+            <div>
+              <h2 className="text-3xl font-black tracking-tight">Avalie os hooks e peça uma nova rodada quando quiser.</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
+                O SkyBob usa seus likes e dislikes para adaptar a próxima geração. Quando você pedir novos hooks, ele mantém o estudo do nicho e troca somente o Hook Lab.
+              </p>
+            </div>
+          </div>
 
-        <div className="flex flex-wrap gap-3">
-          <Button variant={entry.status === "like" ? "default" : "outline"} size="sm" onClick={() => onVote(entry.item, entry.status === "like" ? null : "like")}>
-            <ThumbsUp className="h-4 w-4" />
-            Gostei
-          </Button>
-          <Button variant={entry.status === "dislike" ? "destructive" : "outline"} size="sm" onClick={() => onVote(entry.item, entry.status === "dislike" ? null : "dislike")}>
-            <ThumbsDown className="h-4 w-4" />
-            Não gostei
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+          <div className="space-y-3 text-sm text-slate-300">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              Gostei: <span className="font-semibold text-slate-100">{likes}</span> · Não gostei: <span className="font-semibold text-slate-100">{dislikes}</span>
+            </div>
+            <Button size="lg" onClick={onGenerate} isLoading={isGenerating} loadingLabel="Gerando novos hooks" disabled={!canGenerate}>
+              <RefreshCw className="h-5 w-5" />
+              Gerar novos hooks
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-function CardFeedbackEditor({
-  entry,
-  onVote,
-  onChange,
-  onNotesChange,
-}: {
-  entry: SkyBobFeedbackItem<SkyBobCard>;
-  onVote: (card: SkyBobCard, value: VoteValue) => void;
-  onChange: (card: SkyBobCard, field: keyof SkyBobCard, value: string | string[]) => void;
-  onNotesChange: (card: SkyBobCard, notes: string) => void;
-}) {
-  return (
-    <Card className="border-white/10 bg-white/[0.03]">
-      <CardHeader className="space-y-3 pb-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={statusBadgeVariant(entry.status)}>{statusLabel(entry.status)}</Badge>
-          <Badge variant="outline">{entry.item.section || "sem seção"}</Badge>
+      {generationLockedMessage ? (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+          {generationLockedMessage}
         </div>
-        <CardTitle className="text-lg leading-tight">{entry.item.title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Input value={entry.item.title} onChange={(event) => onChange(entry.item, "title", event.target.value)} placeholder="Título" />
-        <Input value={entry.item.section} onChange={(event) => onChange(entry.item, "section", event.target.value)} placeholder="Seção" />
-        <Textarea value={entry.item.body} onChange={(event) => onChange(entry.item, "body", event.target.value)} placeholder="Resumo do estudo" />
-        <Textarea value={entry.item.bullets.join("\n")} onChange={(event) => onChange(entry.item, "bullets", splitLines(event.target.value))} placeholder="Bullets, uma linha por item" />
-        <Input value={entry.item.badges.join(", ")} onChange={(event) => onChange(entry.item, "badges", splitComma(event.target.value))} placeholder="Badges separadas por vírgula" />
-        <Textarea value={entry.notes} onChange={(event) => onNotesChange(entry.item, event.target.value)} placeholder="Notas do feedback para o núcleo" />
+      ) : null}
 
-        <div className="flex flex-wrap gap-3">
-          <Button variant={entry.status === "like" ? "default" : "outline"} size="sm" onClick={() => onVote(entry.item, entry.status === "like" ? null : "like")}>
-            <ThumbsUp className="h-4 w-4" />
-            Gostei
-          </Button>
-          <Button variant={entry.status === "dislike" ? "destructive" : "outline"} size="sm" onClick={() => onVote(entry.item, entry.status === "dislike" ? null : "dislike")}>
-            <ThumbsDown className="h-4 w-4" />
-            Não gostei
-          </Button>
+      {!generationLockedMessage && !likes && !dislikes ? (
+        <div className="rounded-2xl border border-cyan-400/16 bg-cyan-400/[0.06] px-4 py-3 text-sm leading-6 text-cyan-50">
+          Marque pelo menos um hook como gostei ou não gostei para a IA entender melhor a próxima geração.
         </div>
-      </CardContent>
-    </Card>
+      ) : null}
+
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {hooks.length ? hooks.map((hook, index) => (
+          <HookOptionCard key={`${hook.id}-${index}`} hook={hook} vote={hook.feedback} onVote={onVote} />
+        )) : (
+          <Card className="border-dashed border-white/10 bg-white/[0.02] md:col-span-2 xl:col-span-3">
+            <CardContent className="flex min-h-[180px] items-center justify-center p-6 text-center text-sm text-slate-400">
+              Nenhum hook disponível nesta rodada.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
   );
 }
 
 export default function SkyBobPage() {
+  const userEmail = useAuthStore((state) => state.user?.email ?? null);
+  const authToken = useAuthStore((state) => state.token);
+  const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
+
   const { data: coreData } = useQuery({
-    queryKey: ["business-core", "business-core-global", "skybob"],
-    queryFn: () => api.robots.businessCore.get("business-core-global"),
+    queryKey: ["business-core", BUSINESS_CORE_PUBLIC_ID, "skybob", userEmail],
+    queryFn: () => api.robots.businessCore.get(BUSINESS_CORE_PUBLIC_ID),
+    enabled: Boolean(authToken && userEmail),
   });
 
-  const nucleus = React.useMemo(() => normalizeNucleus(coreData), [coreData]);
+  const nucleus = React.useMemo(() => normalizeNucleus(storageKey, coreData), [coreData, storageKey]);
   const nucleusSignature = React.useMemo(() => buildSkyBobNucleusSignature(nucleus), [nucleus]);
 
-  const [workspace, setWorkspace] = React.useState<SkyBobWorkspace>(() => {
-    const saved = parseSkyBobWorkspace(ensureString(loadNucleus().skybob));
-    return saved ?? createEmptySkyBobWorkspace("");
-  });
-  const [isAnalyzingCatalog, setIsAnalyzingCatalog] = React.useState(false);
-  const [isRunning, setIsRunning] = React.useState(false);
-  const [isRegenerating, setIsRegenerating] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
+  const [workspace, setWorkspace] = React.useState<SkyBobWorkspace>(() => createEmptySkyBobWorkspace(""));
+
+  React.useEffect(() => {
+    setWorkspace(createEmptySkyBobWorkspace(""));
+  }, [storageKey]);
+  const workspaceRef = React.useRef(workspace);
+  const [activeTab, setActiveTab] = React.useState<"study" | "hooklab">("study");
+  const [isRunningStudy, setIsRunningStudy] = React.useState(false);
+  const [isGeneratingHooks, setIsGeneratingHooks] = React.useState(false);
+  const [executionProgress, setExecutionProgress] = React.useState(0);
+  const [executionLabel, setExecutionLabel] = React.useState("Preparando missão");
+
+  React.useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
 
   React.useEffect(() => {
     const fromServer = parseSkyBobWorkspace(coreData?.skybob);
@@ -462,724 +793,323 @@ export default function SkyBobPage() {
 
     setWorkspace((prev) => ({
       ...prev,
-      nucleus_signature: nucleusSignature,
+      nucleus_signature: prev.nucleus_signature || nucleusSignature,
     }));
   }, [coreData?.skybob, nucleusSignature]);
+
+  React.useEffect(() => {
+    const mode = isGeneratingHooks ? "hooks" : isRunningStudy ? "study" : null;
+    if (!mode) {
+      setExecutionProgress(0);
+      return;
+    }
+
+    const labels =
+      mode === "hooks"
+        ? [
+            "Lendo o que você aprovou e rejeitou",
+            "Reposicionando o Hook Lab",
+            "Eliminando repetições",
+            "Montando nova rodada de hooks",
+          ]
+        : [
+            "Lendo o núcleo da empresa",
+            "Organizando o nicho",
+            "Mapeando serviços e sinais",
+            "Montando o estudo e o Hook Lab",
+          ];
+
+    setExecutionLabel(labels[0]);
+    setExecutionProgress(8);
+
+    let tick = 0;
+    const interval = window.setInterval(() => {
+      tick += 1;
+      setExecutionProgress((prev) => Math.min(prev + (prev < 55 ? 8 : prev < 82 ? 4 : 1.4), 92));
+      setExecutionLabel(labels[Math.min(Math.floor(tick / 3), labels.length - 1)]);
+    }, 520);
+
+    return () => window.clearInterval(interval);
+  }, [isGeneratingHooks, isRunningStudy]);
 
   const persistWorkspace = React.useCallback(
     async (nextWorkspace: SkyBobWorkspace, successMessage?: string) => {
       const payload = serializeSkyBobWorkspace(nextWorkspace);
-      saveNucleus({ ...loadNucleus(), ...nucleus, skybob: payload });
-      await api.robots.businessCore.patch("business-core-global", { skybob: payload });
-      if (successMessage) {
-        toastSuccess(successMessage);
+      await api.robots.businessCore.patch(BUSINESS_CORE_PUBLIC_ID, { skybob: payload });
+      const storedLocally = trySaveNucleus(storageKey, { ...loadNucleus(storageKey), ...nucleus });
+      if (!storedLocally) {
+        toastInfo("O resultado do SkyBob foi salvo no backend. O cache local foi ignorado porque o navegador ficou sem espaço.");
       }
+      if (successMessage) toastSuccess(successMessage);
     },
-    [nucleus]
+    [nucleus, storageKey]
   );
 
-  const analyzeCatalog = React.useCallback(
-    async (successMessage?: string) => {
-      setIsAnalyzingCatalog(true);
-      try {
-        const catalogAnalysis = await api.skybob.preflight({ nucleus });
-        const nextWorkspace = withWorkspaceTimestamp({
-          ...workspace,
-          nucleus_signature: nucleusSignature,
-          model_used: workspace.study?.model_used || catalogAnalysis.model_used,
-          catalog_analysis: catalogAnalysis,
-        });
-        setWorkspace(nextWorkspace);
-        await persistWorkspace(nextWorkspace, successMessage);
-      } catch (error) {
-        toastApiError(error, "Não consegui analisar os serviços e produtos do núcleo");
-      } finally {
-        setIsAnalyzingCatalog(false);
-      }
+  const setWorkspaceAndPersist = React.useCallback(
+    async (
+      updater: (current: SkyBobWorkspace) => SkyBobWorkspace,
+      options?: { successMessage?: string }
+    ) => {
+      const nextWorkspace = withWorkspaceTimestamp(updater(workspaceRef.current));
+      workspaceRef.current = nextWorkspace;
+      setWorkspace(nextWorkspace);
+      await persistWorkspace(nextWorkspace, options?.successMessage);
+      return nextWorkspace;
     },
-    [nucleus, nucleusSignature, persistWorkspace, workspace]
+    [persistWorkspace]
   );
-
-  React.useEffect(() => {
-    if (workspace.catalog_analysis && workspace.nucleus_signature === nucleusSignature) return;
-    if (!Object.values(nucleus).some((value) => ensureString(value).trim())) return;
-    void analyzeCatalog();
-  }, [analyzeCatalog, nucleus, nucleusSignature, workspace.catalog_analysis, workspace.nucleus_signature]);
-
-  const upsertHookFeedback = React.useCallback((hook: SkyBobHook, updater: (current: SkyBobFeedbackItem<SkyBobHook>) => SkyBobFeedbackItem<SkyBobHook>) => {
-    setWorkspace((prev) => {
-      const current = prev.hooks_feedback[hook.id] ?? createHookFeedbackItem(hook);
-      const nextEntry = updater(current);
-      return withWorkspaceTimestamp({
-        ...prev,
-        hooks_feedback: {
-          ...prev.hooks_feedback,
-          [hook.id]: nextEntry,
-        },
-      });
-    });
-  }, []);
-
-  const upsertCardFeedback = React.useCallback((card: SkyBobCard, updater: (current: SkyBobFeedbackItem<SkyBobCard>) => SkyBobFeedbackItem<SkyBobCard>) => {
-    setWorkspace((prev) => {
-      const current = prev.cards_feedback[card.id] ?? createCardFeedbackItem(card);
-      const nextEntry = updater(current);
-      return withWorkspaceTimestamp({
-        ...prev,
-        cards_feedback: {
-          ...prev.cards_feedback,
-          [card.id]: nextEntry,
-        },
-      });
-    });
-  }, []);
 
   const handleHookVote = React.useCallback(
     (hook: SkyBobHook, value: VoteValue) => {
-      upsertHookFeedback(hook, (current) => ({
-        ...current,
-        item: current.item.id ? current.item : hook,
-        status: value,
-        updated_at: formatNowIso(),
-      }));
+      void setWorkspaceAndPersist((current) => {
+        const entry = current.hooks_feedback[hook.id] ?? createHookFeedbackItem(hook);
+        return {
+          ...current,
+          hooks_feedback: {
+            ...current.hooks_feedback,
+            [hook.id]: {
+              ...entry,
+              item: hook,
+              status: value,
+              updated_at: nowIso(),
+            },
+          },
+        };
+      }).catch((error) => {
+        toastApiError(error, "Não consegui salvar sua avaliação do hook");
+      });
     },
-    [upsertHookFeedback]
+    [setWorkspaceAndPersist]
   );
 
-  const handleCardVote = React.useCallback(
-    (card: SkyBobCard, value: VoteValue) => {
-      upsertCardFeedback(card, (current) => ({
-        ...current,
-        item: current.item.id ? current.item : card,
-        status: value,
-        updated_at: formatNowIso(),
-      }));
-    },
-    [upsertCardFeedback]
-  );
+  const startSkyBob = React.useCallback(async () => {
+    if (!countFilledNucleusFields(nucleus)) {
+      toastInfo("Preencha o núcleo da empresa antes de iniciar o SkyBob.");
+      return;
+    }
 
-  const handleHookChange = React.useCallback(
-    (hook: SkyBobHook, field: keyof SkyBobHook, value: string | string[]) => {
-      upsertHookFeedback(hook, (current) => ({
-        ...current,
-        item: {
-          ...current.item,
-          [field]: value,
-        },
-        updated_at: formatNowIso(),
-      }));
-    },
-    [upsertHookFeedback]
-  );
+    setActiveTab("study");
+    setIsRunningStudy(true);
 
-  const handleCardChange = React.useCallback(
-    (card: SkyBobCard, field: keyof SkyBobCard, value: string | string[]) => {
-      upsertCardFeedback(card, (current) => ({
-        ...current,
-        item: {
-          ...current.item,
-          [field]: value,
-        },
-        updated_at: formatNowIso(),
-      }));
-    },
-    [upsertCardFeedback]
-  );
-
-  const handleHookNotesChange = React.useCallback(
-    (hook: SkyBobHook, notes: string) => {
-      upsertHookFeedback(hook, (current) => ({
-        ...current,
-        notes,
-        updated_at: formatNowIso(),
-      }));
-    },
-    [upsertHookFeedback]
-  );
-
-  const handleCardNotesChange = React.useCallback(
-    (card: SkyBobCard, notes: string) => {
-      upsertCardFeedback(card, (current) => ({
-        ...current,
-        notes,
-        updated_at: formatNowIso(),
-      }));
-    },
-    [upsertCardFeedback]
-  );
-
-  const runStudy = React.useCallback(async () => {
-    setIsRunning(true);
     try {
-      const catalogAnalysis = workspace.catalog_analysis ?? (await api.skybob.preflight({ nucleus }));
+      const catalogAnalysis = await api.skybob.preflight({ nucleus });
+      setExecutionProgress((prev) => Math.max(prev, 38));
+
       const result = await api.skybob.run({
         nucleus,
         catalog_analysis: catalogAnalysis,
         mode: "full",
       });
 
-      const nextWorkspace = withWorkspaceTimestamp({
-        ...workspace,
-        nucleus_signature: nucleusSignature,
-        model_used: result.model_used,
-        catalog_analysis: result.catalog_analysis ?? catalogAnalysis,
-        study: result,
-      });
-      setWorkspace(nextWorkspace);
-      await persistWorkspace(nextWorkspace, "SkyBob iniciado e salvo no núcleo da empresa.");
+      setExecutionProgress(100);
+
+      await setWorkspaceAndPersist(
+        (current) => ({
+          ...current,
+          nucleus_signature: nucleusSignature,
+          model_used: result.model_used,
+          catalog_analysis: result.catalog_analysis ?? catalogAnalysis,
+          study: result,
+        }),
+        { successMessage: "SkyBob executado e salvo no núcleo da empresa." }
+      );
     } catch (error) {
       toastApiError(error, "Não consegui executar o SkyBob");
     } finally {
-      setIsRunning(false);
+      setIsRunningStudy(false);
     }
-  }, [nucleus, nucleusSignature, persistWorkspace, workspace]);
+  }, [nucleus, nucleusSignature, setWorkspaceAndPersist]);
 
-  const rerunStudy = React.useCallback(async () => {
-    if (!workspace.study) {
-      toastInfo("Inicie o SkyBob antes de refinar.");
+  const study = workspace.study;
+  const hasStudy = Boolean(study);
+  const filledCount = React.useMemo(() => countFilledNucleusFields(nucleus), [nucleus]);
+  const staleStudy = Boolean(hasStudy && workspace.nucleus_signature && workspace.nucleus_signature !== nucleusSignature);
+  const catalogAnalysis = workspace.catalog_analysis ?? study?.catalog_analysis ?? null;
+
+  const hooksWithFeedback = React.useMemo(
+    () =>
+      (study?.hooks || []).map((hook) => ({
+        ...hook,
+        feedback: workspace.hooks_feedback[hook.id]?.status ?? null,
+      })),
+    [study?.hooks, workspace.hooks_feedback]
+  );
+
+  const feedbackPreferences = React.useMemo(() => buildSkyBobFeedbackPreferences(workspace), [workspace]);
+  const feedbackSummary = (feedbackPreferences.feedback_summary || {}) as Partial<{
+    hook_likes: number;
+    hook_dislikes: number;
+  }>;
+  const hookLikes = feedbackSummary.hook_likes ?? 0;
+  const hookDislikes = feedbackSummary.hook_dislikes ?? 0;
+  const canGenerateHooks = Boolean(study) && !staleStudy && hookLikes + hookDislikes > 0;
+
+  const generateNewHooks = React.useCallback(async () => {
+    if (!workspaceRef.current.study) {
+      toastInfo("Inicie o SkyBob antes de gerar novos hooks.");
       return;
     }
 
-    setIsRegenerating(true);
+    if (staleStudy) {
+      toastInfo("O núcleo mudou. O Hook Lab fica congelado junto com o estudo salvo.");
+      return;
+    }
+
+    const feedback = buildSkyBobFeedbackPreferences(workspaceRef.current);
+    const feedbackSummary = (feedback.feedback_summary || {}) as Partial<{
+      hook_likes: number;
+      hook_dislikes: number;
+    }>;
+    const voteCount = (feedbackSummary.hook_likes ?? 0) + (feedbackSummary.hook_dislikes ?? 0);
+    if (!voteCount) {
+      toastInfo("Avalie pelo menos um hook antes de pedir uma nova rodada.");
+      return;
+    }
+
+    setActiveTab("hooklab");
+    setIsGeneratingHooks(true);
+
     try {
       const result = await api.skybob.run({
         nucleus,
-        catalog_analysis: workspace.catalog_analysis,
-        preferences: buildSkyBobFeedbackPreferences(workspace),
-        previous_study: workspace.study,
+        catalog_analysis: workspaceRef.current.catalog_analysis,
+        preferences: feedback,
+        previous_study: workspaceRef.current.study,
         mode: "refine",
       });
 
-      const nextWorkspace = withWorkspaceTimestamp({
-        ...workspace,
-        nucleus_signature: nucleusSignature,
-        model_used: result.model_used,
-        study: result,
-      });
-      setWorkspace(nextWorkspace);
-      await persistWorkspace(nextWorkspace, "Hooks e cards refinados com base no feedback salvo.");
+      if (!Array.isArray(result.hooks) || !result.hooks.length) {
+        toastInfo("Não consegui montar uma nova rodada de hooks agora. Mantive a rodada anterior salva.");
+        return;
+      }
+
+      setExecutionProgress(100);
+
+      await setWorkspaceAndPersist(
+        (current) => ({
+          ...current,
+          nucleus_signature: current.nucleus_signature,
+          model_used: result.model_used,
+          study: result,
+        }),
+        { successMessage: "Nova rodada de hooks gerada com base no seu feedback." }
+      );
     } catch (error) {
-      toastApiError(error, "Não consegui refinar hooks e estudo");
+      toastApiError(error, "Não consegui gerar novos hooks");
     } finally {
-      setIsRegenerating(false);
+      setIsGeneratingHooks(false);
     }
-  }, [nucleus, nucleusSignature, persistWorkspace, workspace]);
+  }, [nucleus, setWorkspaceAndPersist, staleStudy]);
 
-  const saveWorkspaceChanges = React.useCallback(async () => {
-    setIsSaving(true);
-    try {
-      const nextWorkspace = withWorkspaceTimestamp({
-        ...workspace,
-        nucleus_signature: nucleusSignature,
-        model_used: workspace.study?.model_used || workspace.catalog_analysis?.model_used || workspace.model_used,
-      });
-      setWorkspace(nextWorkspace);
-      await persistWorkspace(nextWorkspace, "Feedbacks e edições salvos no campo SkyBob do núcleo.");
-    } catch (error) {
-      toastApiError(error, "Não consegui salvar o feedback do SkyBob");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [nucleusSignature, persistWorkspace, workspace]);
-
-  const study = workspace.study;
-  const resolvedHooks = React.useMemo(() => (study?.hooks || []).map((hook) => resolveHook(workspace, hook)), [study, workspace]);
-  const resolvedCards = React.useMemo(() => (study?.cards || []).map((card) => resolveCard(workspace, card)), [study, workspace]);
-
-  const hookFeedbackEntries = React.useMemo(() => sortFeedbackByDate(Object.values(workspace.hooks_feedback)), [workspace.hooks_feedback]);
-  const cardFeedbackEntries = React.useMemo(() => sortFeedbackByDate(Object.values(workspace.cards_feedback)), [workspace.cards_feedback]);
-
-  const likedHooks = hookFeedbackEntries.filter((entry) => entry.status === "like");
-  const dislikedHooks = hookFeedbackEntries.filter((entry) => entry.status === "dislike");
-  const pendingHooks = hookFeedbackEntries.filter((entry) => entry.status === null);
-  const likedCards = cardFeedbackEntries.filter((entry) => entry.status === "like");
-  const dislikedCards = cardFeedbackEntries.filter((entry) => entry.status === "dislike");
-  const pendingCards = cardFeedbackEntries.filter((entry) => entry.status === null);
-
-  const currentHookIds = new Set((study?.hooks || []).map((hook) => hook.id));
-  const currentCardIds = new Set((study?.cards || []).map((card) => card.id));
-
-  const currentHookEditors = React.useMemo(() => {
-    return resolvedHooks.map((hook) => workspace.hooks_feedback[hook.id] ?? createHookFeedbackItem(hook));
-  }, [resolvedHooks, workspace.hooks_feedback]);
-
-  const currentCardEditors = React.useMemo(() => {
-    return resolvedCards.map((card) => workspace.cards_feedback[card.id] ?? createCardFeedbackItem(card));
-  }, [resolvedCards, workspace.cards_feedback]);
-
-  const historicalHookEditors = React.useMemo(
-    () => hookFeedbackEntries.filter((entry) => !currentHookIds.has(entry.id)),
-    [currentHookIds, hookFeedbackEntries]
-  );
-  const historicalCardEditors = React.useMemo(
-    () => cardFeedbackEntries.filter((entry) => !currentCardIds.has(entry.id)),
-    [cardFeedbackEntries, currentCardIds]
+  const resultHeroBadges = React.useMemo(
+    () => [
+      { label: "Estudo fixo do núcleo", variant: "green" as const },
+      { label: study?.model_used || workspace.model_used || "modelo não informado", variant: "outline" as const },
+      { label: `Gerado em ${formatDateTime(study?.generated_at || workspace.updated_at)}`, variant: "outline" as const },
+    ],
+    [study?.generated_at, study?.model_used, workspace.model_used, workspace.updated_at]
   );
 
-  const filledCount = React.useMemo(
-    () => Object.values(nucleus || {}).filter((value) => ensureString(value).trim() && ensureString(value).trim() !== "não informado").length,
-    [nucleus]
-  );
-
-  const isCatalogStale = workspace.nucleus_signature && workspace.nucleus_signature !== nucleusSignature;
-  const detectedItems = workspace.catalog_analysis?.detected_items || [];
+  const generationLockedMessage = staleStudy
+    ? "O núcleo da empresa foi alterado depois da geração deste estudo. Como o estudo base é fixo, o Hook Lab também fica congelado até existir um novo estudo salvo no núcleo."
+    : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-8 px-4 pb-24 sm:px-6 lg:px-8">
-      <RocketHero />
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-4 pb-24 pt-2 sm:px-6 lg:px-8">
+      {!hasStudy && !isRunningStudy && !isGeneratingHooks ? (
+        <IntroScreen canStart={filledCount > 0} filledCount={filledCount} onStart={() => void startSkyBob()} />
+      ) : null}
 
-      <div className="-mt-20 px-4 md:px-8">
-        <Card className="border-cyan-400/20 bg-[linear-gradient(180deg,rgba(10,16,28,0.94),rgba(8,11,20,0.98))] backdrop-blur">
-          <CardContent className="flex flex-col gap-6 p-6 md:p-8">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">SkyBob Engine</div>
-                <div className="text-2xl font-black tracking-tight">Pré-análise de catálogo + estudo refinável com memória</div>
-                <p className="max-w-3xl text-sm leading-6 text-slate-300">
-                  O núcleo atual tem {filledCount} campos preenchidos. Antes de rodar o estudo completo, o SkyBob primeiro normaliza serviços/produtos para reduzir generalismo.
-                </p>
-              </div>
+      {(isRunningStudy || isGeneratingHooks) ? (
+        <SpaceRunCard
+          progress={executionProgress}
+          label={executionLabel}
+          title={isGeneratingHooks ? "Refinando o Hook Lab" : "Montando seu estudo do nicho"}
+          description={
+            isGeneratingHooks
+              ? "O estudo base permanece fixo. Agora o SkyBob está lendo seus likes e dislikes para criar uma nova rodada de hooks sem repetir o que já passou."
+              : "O SkyBob está consumindo o núcleo da empresa, interpretando o nicho e preparando uma entrega mais clara para o usuário."
+          }
+        />
+      ) : null}
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button variant="outline" size="lg" onClick={() => void analyzeCatalog("Catálogo reanalisado e salvo no núcleo.")} isLoading={isAnalyzingCatalog} loadingLabel="Analisando catálogo">
-                  <Database className="h-5 w-5" />
-                  Reanalisar serviços/produtos
-                </Button>
-                <Button size="lg" onClick={() => void runStudy()} isLoading={isRunning} loadingLabel="Executando SkyBob">
-                  <Rocket className="h-5 w-5" />
-                  Iniciar SkyBob
-                </Button>
-                <Button variant="outline" size="lg" onClick={() => void rerunStudy()} isLoading={isRegenerating} loadingLabel="Refinando" disabled={!study}>
-                  <RefreshCw className="h-5 w-5" />
-                  Refinar hooks e estudo
-                </Button>
-                <Button variant="outline" size="lg" onClick={() => void saveWorkspaceChanges()} isLoading={isSaving} loadingLabel="Salvando">
-                  <Save className="h-5 w-5" />
-                  Salvar feedback e edições
-                </Button>
-              </div>
-            </div>
-
-            {isCatalogStale ? (
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                O núcleo mudou desde a última análise. Reanalise os serviços/produtos para alinhar o próximo estudo.
-              </div>
-            ) : null}
-
-            <div className="grid gap-4 lg:grid-cols-5">
-              <StatCard
-                icon={<Layers3 className="h-4 w-4" />}
-                title="Itens detectados"
-                value={detectedItems.length}
-                description="Serviços/produtos normalizados antes da geração."
-              />
-              <StatCard
-                icon={<Lightbulb className="h-4 w-4" />}
-                title="Hooks aprovados"
-                value={likedHooks.length}
-                description="Histórico salvo de hooks curtidos."
-              />
-              <StatCard
-                icon={<Target className="h-4 w-4" />}
-                title="Estudos aprovados"
-                value={likedCards.length}
-                description="Cards estratégicos aprovados e editáveis."
-              />
-              <StatCard
-                icon={<Wand2 className="h-4 w-4" />}
-                title="Feedback total"
-                value={hookFeedbackEntries.length + cardFeedbackEntries.length}
-                description="Tudo o que já foi avaliado ou editado."
-              />
-              <StatCard
-                icon={<Sparkles className="h-4 w-4" />}
-                title="Modelo do SkyBob"
-                value={study?.model_used || workspace.catalog_analysis?.model_used || "—"}
-                description="Execução principal do SkyBob agora prioriza GPT-5.4."
-              />
-            </div>
-
-            <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <Card className="border-cyan-400/16">
-                <CardHeader>
-                  <CardTitle className="text-2xl">Serviços e produtos detectados no núcleo</CardTitle>
-                  <CardDescription className="text-base leading-7 text-slate-300">
-                    {workspace.catalog_analysis?.summary || "O SkyBob ainda está analisando o catálogo para reduzir generalismo na execução."}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-
-              <Card className="border-cyan-400/16">
-                <CardHeader>
-                  <CardTitle className="text-2xl">Feedback persistido</CardTitle>
-                  <CardDescription className="text-slate-300">
-                    Hooks curtidos: {likedHooks.length} · hooks rejeitados: {dislikedHooks.length} · estudos curtidos: {likedCards.length} · estudos rejeitados: {dislikedCards.length}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Hooks</div>
-                    <div className="space-y-2 text-sm text-slate-200">
-                      <div className="flex items-center justify-between"><span>Aprovados</span><Badge variant="green">{likedHooks.length}</Badge></div>
-                      <div className="flex items-center justify-between"><span>Rejeitados</span><Badge variant="red">{dislikedHooks.length}</Badge></div>
-                      <div className="flex items-center justify-between"><span>Sem feedback salvo</span><Badge variant="outline">{pendingHooks.length}</Badge></div>
-                    </div>
+      {hasStudy && !isRunningStudy && !isGeneratingHooks ? (
+        <>
+          <Card className="overflow-hidden border-cyan-400/16 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.14),transparent_32%),linear-gradient(180deg,rgba(10,16,28,0.94),rgba(8,11,20,0.98))]">
+            <CardContent className="flex flex-col gap-6 p-6 md:p-8">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {resultHeroBadges.map((badge, index) => (
+                      <Badge key={`${badge.label}-${index}`} variant={badge.variant}>
+                        {badge.label}
+                      </Badge>
+                    ))}
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Estudos</div>
-                    <div className="space-y-2 text-sm text-slate-200">
-                      <div className="flex items-center justify-between"><span>Aprovados</span><Badge variant="green">{likedCards.length}</Badge></div>
-                      <div className="flex items-center justify-between"><span>Rejeitados</span><Badge variant="red">{dislikedCards.length}</Badge></div>
-                      <div className="flex items-center justify-between"><span>Sem feedback salvo</span><Badge variant="outline">{pendingCards.length}</Badge></div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {detectedItems.length ? (
-              <div className="grid gap-5 xl:grid-cols-2">
-                {detectedItems.map((item) => (
-                  <CatalogItemCard key={item.id} item={item} />
-                ))}
-              </div>
-            ) : (
-              <Card className="border-dashed border-cyan-400/20 bg-white/[0.02]">
-                <CardContent className="flex min-h-[160px] flex-col items-center justify-center gap-4 p-8 text-center">
-                  <Database className="h-12 w-12 text-cyan-200" />
-                  <div className="space-y-2">
-                    <div className="text-xl font-black tracking-tight">Ainda não há catálogo pré-analisado.</div>
-                    <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                      Use o botão de reanálise ou preencha melhor serviços/produtos no núcleo para a IA detectar o catálogo antes da execução.
+                  <div className="space-y-3">
+                    <h1 className="text-3xl font-black tracking-tight md:text-4xl">SkyBob salvo e organizado em duas partes: estudo do nicho e Hook Lab.</h1>
+                    <p className="max-w-3xl text-sm leading-8 text-slate-300 md:text-base">
+                      Aqui o usuário enxerga primeiro o estudo do nicho com clareza. O Hook Lab fica separado e só muda quando você pede uma nova rodada de hooks.
                     </p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                </div>
 
-      {study ? (
-        <>
-          <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <Card className="border-cyan-400/16">
-              <CardHeader>
-                <CardTitle className="text-2xl">Leitura estratégica do nicho</CardTitle>
-                <CardDescription className="text-base leading-7 text-slate-300">{study.overview}</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-cyan-400/16">
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-2xl">Direção do Hook Lab</CardTitle>
-                  <Badge variant="outline">{study.mode === "refine" ? "refino parcial" : "execução completa"}</Badge>
-                  <Badge variant="outline">{study.model_used}</Badge>
-                </div>
-                <CardDescription className="text-slate-300">
-                  {study.hook_strategy.positioning_summary || "O SkyBob vai usar seu feedback para aproximar os hooks do tom e do ângulo que você prefere."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Ângulos a priorizar</div>
-                  <div className="space-y-2 text-sm text-slate-200">
-                    {study.hook_strategy.preferred_angles.map((item) => (
-                      <div key={item}>{item}</div>
-                    ))}
+                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-2 flex items-center gap-2 text-cyan-200">
+                      <Layers3 className="h-4 w-4" />
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em]">Itens detectados</span>
+                    </div>
+                    <div className="text-2xl font-black">{catalogAnalysis?.detected_items.length ?? 0}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-2 flex items-center gap-2 text-cyan-200">
+                      <Lightbulb className="h-4 w-4" />
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em]">Hooks curtidos</span>
+                    </div>
+                    <div className="text-2xl font-black">{hookLikes}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-2 flex items-center gap-2 text-cyan-200">
+                      <Target className="h-4 w-4" />
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em]">Blocos de insight</span>
+                    </div>
+                    <div className="text-2xl font-black">{study?.cards.length ?? 0}</div>
                   </div>
                 </div>
-                <div>
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Ângulos a reduzir</div>
-                  <div className="space-y-2 text-sm text-slate-200">
-                    {study.hook_strategy.angles_to_reduce.length ? (
-                      study.hook_strategy.angles_to_reduce.map((item) => <div key={item}>{item}</div>)
-                    ) : (
-                      <div>Nenhum padrão rejeitado forte até agora.</div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <Card className="border-cyan-400/16">
-              <CardHeader>
-                <CardTitle className="text-2xl">Resumo tático do nicho</CardTitle>
-                <CardDescription className="text-slate-300">A base do estudo completo fica preservada quando você clica em refinar.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-5 md:grid-cols-3">
-                <div>
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Padrões</div>
-                  <div className="space-y-2 text-sm text-slate-200">
-                    {study.success_patterns.map((item) => (
-                      <div key={item}>{item}</div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Erros</div>
-                  <div className="space-y-2 text-sm text-slate-200">
-                    {study.mistakes.map((item) => (
-                      <div key={item}>{item}</div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Oportunidades</div>
-                  <div className="space-y-2 text-sm text-slate-200">
-                    {study.opportunities.map((item) => (
-                      <div key={item}>{item}</div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-cyan-400/16">
-              <CardHeader>
-                <CardTitle className="text-2xl">Recomendações de calendário</CardTitle>
-                <CardDescription className="text-slate-300">Direções rápidas para transformar o estudo em sequência de publicação.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {study.calendar_recommendations.map((item) => (
-                  <div key={item} className="flex items-start gap-2 text-sm leading-6 text-slate-200">
-                    <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-cyan-300" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-2xl font-black tracking-tight">Hook Lab</h2>
-                <p className="text-sm text-slate-300">
-                  Ao refinar, o SkyBob só troca a direção de hooks e cards. A base do estudo acima continua como memória estável.
-                </p>
               </div>
-              <div className="text-sm text-slate-400">
-                Hooks curtidos: {likedHooks.length} · Hooks rejeitados: {dislikedHooks.length} · Modelo: {study.model_used}
-              </div>
-            </div>
 
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {resolvedHooks.map((hook) => (
-                <HookLabCard key={hook.id} hook={hook} vote={workspace.hooks_feedback[hook.id]?.status ?? null} onVote={handleHookVote} />
-              ))}
-            </div>
-          </div>
+              {staleStudy ? (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                  O núcleo da empresa mudou depois que este estudo foi salvo. Esta tela continua mostrando o último estudo válido salvo no núcleo.
+                </div>
+              ) : null}
 
-          <div className="space-y-4">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-2xl font-black tracking-tight">Cards estratégicos do estudo</h2>
-                <p className="text-sm text-slate-300">Esses cards continuam editáveis e com feedback persistido no núcleo da empresa.</p>
+              <div className="flex flex-wrap gap-3">
+                <TabButton active={activeTab === "study"} onClick={() => setActiveTab("study")} icon={<Sparkles className="h-4 w-4" />} label="Estudo do nicho" />
+                <TabButton active={activeTab === "hooklab"} onClick={() => setActiveTab("hooklab")} icon={<Rocket className="h-4 w-4" />} label="Hook Lab" />
               </div>
-              <div className="text-sm text-slate-400">
-                Estudos curtidos: {likedCards.length} · Estudos rejeitados: {dislikedCards.length}
-              </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {resolvedCards.map((card) => (
-                <StudyCard key={card.id} card={card} vote={workspace.cards_feedback[card.id]?.status ?? null} onVote={handleCardVote} />
-              ))}
-            </div>
-          </div>
+          {activeTab === "study" && study ? (
+            <StudyView study={study} catalogAnalysis={catalogAnalysis} likedHooksCount={hookLikes} />
+          ) : null}
+
+          {activeTab === "hooklab" && study ? (
+            <HookLabView
+              hooks={hooksWithFeedback}
+              likes={hookLikes}
+              dislikes={hookDislikes}
+              canGenerate={canGenerateHooks}
+              isGenerating={isGeneratingHooks}
+              onVote={handleHookVote}
+              onGenerate={() => void generateNewHooks()}
+              generationLockedMessage={generationLockedMessage}
+            />
+          ) : null}
         </>
-      ) : (
-        <Card className="border-dashed border-cyan-400/20 bg-white/[0.02]">
-          <CardContent className="flex min-h-[220px] flex-col items-center justify-center gap-4 p-8 text-center">
-            <Rocket className="h-12 w-12 text-cyan-200" />
-            <div className="space-y-2">
-              <div className="text-2xl font-black tracking-tight">O SkyBob ainda não foi iniciado.</div>
-              <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                A pré-análise do catálogo já pode ser salva antes da execução completa. Depois, ao clicar em refinar, o SkyBob só troca hooks/cards com base no seu feedback.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="border-cyan-400/16">
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-2xl">Central de feedback de hooks</CardTitle>
-              <Badge variant="outline">fica salvo no núcleo</Badge>
-            </div>
-            <CardDescription className="text-slate-300">
-              Aqui ficam os hooks atuais e o histórico dos hooks que você já gostou, rejeitou ou editou.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {currentHookEditors.length ? (
-              <>
-                <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">
-                  <Edit3 className="h-4 w-4" />
-                  Hooks da execução atual
-                </div>
-                {currentHookEditors.map((entry) => (
-                  <HookFeedbackEditor
-                    key={entry.id}
-                    entry={entry}
-                    onVote={handleHookVote}
-                    onChange={handleHookChange}
-                    onNotesChange={handleHookNotesChange}
-                  />
-                ))}
-              </>
-            ) : null}
-
-            {historicalHookEditors.length ? (
-              <>
-                <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Histórico salvo
-                </div>
-                {historicalHookEditors.map((entry) => (
-                  <HookFeedbackEditor
-                    key={entry.id}
-                    entry={entry}
-                    onVote={handleHookVote}
-                    onChange={handleHookChange}
-                    onNotesChange={handleHookNotesChange}
-                  />
-                ))}
-              </>
-            ) : null}
-
-            {!currentHookEditors.length && !historicalHookEditors.length ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-300">
-                Nenhum hook recebeu feedback ainda. Quando você curtir, rejeitar ou editar um hook, ele aparece aqui.
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card className="border-cyan-400/16">
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-2xl">Central de feedback do estudo</CardTitle>
-              <Badge variant="outline">cards estratégicos persistidos</Badge>
-            </div>
-            <CardDescription className="text-slate-300">
-              Visualize onde ficaram os estudos/cards curtidos ou rejeitados e edite antes de salvar no núcleo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {currentCardEditors.length ? (
-              <>
-                <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">
-                  <Edit3 className="h-4 w-4" />
-                  Cards da execução atual
-                </div>
-                {currentCardEditors.map((entry) => (
-                  <CardFeedbackEditor
-                    key={entry.id}
-                    entry={entry}
-                    onVote={handleCardVote}
-                    onChange={handleCardChange}
-                    onNotesChange={handleCardNotesChange}
-                  />
-                ))}
-              </>
-            ) : null}
-
-            {historicalCardEditors.length ? (
-              <>
-                <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Histórico salvo
-                </div>
-                {historicalCardEditors.map((entry) => (
-                  <CardFeedbackEditor
-                    key={entry.id}
-                    entry={entry}
-                    onVote={handleCardVote}
-                    onChange={handleCardChange}
-                    onNotesChange={handleCardNotesChange}
-                  />
-                ))}
-              </>
-            ) : null}
-
-            {!currentCardEditors.length && !historicalCardEditors.length ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-300">
-                Nenhum card recebeu feedback ainda. Quando você curtir, rejeitar ou editar um card, ele aparece aqui.
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-4">
-        <Card className="border-cyan-400/16">
-          <CardHeader>
-            <CardTitle className="text-lg">Hooks curtidos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-200">
-            {likedHooks.length ? likedHooks.map((entry) => <div key={entry.id}>{entry.item.hook}</div>) : <div>Nenhum ainda.</div>}
-          </CardContent>
-        </Card>
-        <Card className="border-cyan-400/16">
-          <CardHeader>
-            <CardTitle className="text-lg">Hooks rejeitados</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-200">
-            {dislikedHooks.length ? dislikedHooks.map((entry) => <div key={entry.id}>{entry.item.hook}</div>) : <div>Nenhum ainda.</div>}
-          </CardContent>
-        </Card>
-        <Card className="border-cyan-400/16">
-          <CardHeader>
-            <CardTitle className="text-lg">Estudos curtidos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-200">
-            {likedCards.length ? likedCards.map((entry) => <div key={entry.id}>{entry.item.title}</div>) : <div>Nenhum ainda.</div>}
-          </CardContent>
-        </Card>
-        <Card className="border-cyan-400/16">
-          <CardHeader>
-            <CardTitle className="text-lg">Estudos rejeitados</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-200">
-            {dislikedCards.length ? dislikedCards.map((entry) => <div key={entry.id}>{entry.item.title}</div>) : <div>Nenhum ainda.</div>}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-cyan-400/16">
-        <CardHeader>
-          <CardTitle className="text-xl">O que mudou no fluxo</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-200">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-cyan-200"><Sparkles className="h-4 w-4" />Modelo</div>
-            <div>O SkyBob agora prioriza GPT-5.4 na execução principal do estudo.</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-200">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-cyan-200"><Database className="h-4 w-4" />Pré-análise</div>
-            <div>Serviços/produtos são analisados antes da execução completa e já ficam visíveis na interface.</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-200">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-cyan-200"><RefreshCw className="h-4 w-4" />Refinamento</div>
-            <div>Refinar troca só hooks/cards com base no feedback, sem reescrever a fundação do estudo.</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-200">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-cyan-200"><Save className="h-4 w-4" />Persistência</div>
-            <div>Likes, dislikes e edições ficam serializados no campo SkyBob do núcleo da empresa.</div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="hidden">
-        <XCircle />
-      </div>
+      ) : null}
     </div>
   );
 }

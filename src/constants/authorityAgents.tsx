@@ -140,7 +140,7 @@ export const AUTHORITY_AGENTS: AuthorityAgentDef[] = [
     key: "tiktok", 
     name: "Mia - Tiktok", 
     label: "Agente TikTok", 
-    desc: "30 ideias de vídeos curtos (autoridade, prova, decisão).", 
+    desc: "Bio + roteiros + legendas + hooks + trends para autoridade real no TikTok.", 
     Icon: createIcon(miaImg),
     SidebarIcon: Sparkles 
   },

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { KnowledgeUploader } from "@/components/robot/KnowledgeUploader";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/robots";
+import { useAuthStore } from "@/state/authStore";
 
 const CORE_GROUPS = [
   { title: "Fundação", icon: BrainCircuit, fields: [
@@ -38,7 +39,65 @@ const CORE_GROUPS = [
   ]},
 ];
 
-const STORAGE_KEY = "ori_authority_nucleus_v1";
+const BUSINESS_CORE_PUBLIC_ID = "business-core";
+const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
+
+const LOCAL_CORE_FIELDS = [
+  "company_name",
+  "owner_name",
+  "city_state",
+  "service_area",
+  "main_audience",
+  "services_products",
+  "real_differentials",
+  "restrictions",
+  "reviews",
+  "testimonials",
+  "usable_links_texts",
+  "forbidden_content",
+  "site",
+  "google_business_profile",
+  "instagram",
+  "linkedin",
+  "youtube",
+  "tiktok",
+] as const;
+
+function sanitizeDraftForLocalStorage(input: Record<string, unknown>): Record<string, string> {
+  const next: Record<string, string> = {};
+  LOCAL_CORE_FIELDS.forEach((field) => {
+    const value = input[field];
+    if (value !== undefined && value !== null) {
+      next[field] = String(value);
+    }
+  });
+  return next;
+}
+
+function loadLocalDraft(storageKey: string): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? sanitizeDraftForLocalStorage(parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalDraft(storageKey: string, draft: Record<string, unknown>) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(sanitizeDraftForLocalStorage(draft)));
+  } catch (error) {
+    console.warn("Não consegui salvar o núcleo localmente.", error);
+  }
+}
+
+
+function buildScopedStorageKey(userEmail?: string | null): string {
+  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
+  return `${STORAGE_KEY_PREFIX}:${normalized}`;
+}
 
 function getSkyBobDisplayValue(value: string): string {
   const parsed = parseSkyBobWorkspace(value);
@@ -51,26 +110,34 @@ function isStructuredSkyBobValue(value: string): boolean {
 }
 
 export default function AuthorityNucleusPage() {
-  const [draft, setDraft] = React.useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
-  });
+  const userEmail = useAuthStore((state) => state.user?.email ?? null);
+  const authToken = useAuthStore((state) => state.token);
+  const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
+  const [draft, setDraft] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    setDraft(loadLocalDraft(storageKey));
+  }, [storageKey]);
 
   const { data: coreData, refetch } = useQuery({
-    queryKey: ["business-core", "business-core-global"],
-    queryFn: () => api.robots.businessCore.get("business-core-global"),
+    queryKey: ["business-core", BUSINESS_CORE_PUBLIC_ID, userEmail],
+    queryFn: () => api.robots.businessCore.get(BUSINESS_CORE_PUBLIC_ID),
+    enabled: Boolean(authToken && userEmail),
   });
 
   React.useEffect(() => {
     if (!coreData) return;
-    setDraft((prev) => ({ ...coreData, ...prev } as Record<string, string>));
-  }, [coreData]);
+    setDraft((prev) => ({ ...(coreData as Record<string, string>), ...prev }));
+    saveLocalDraft(storageKey, coreData as Record<string, unknown>);
+  }, [coreData, storageKey]);
 
   const saveCore = async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    saveLocalDraft(storageKey, draft);
     try {
-      await api.robots.businessCore.patch("business-core-global", draft as any);
+      await api.robots.businessCore.patch(BUSINESS_CORE_PUBLIC_ID, draft as any);
     } catch (err) {
       toastApiError(err, "Salvei localmente, mas não consegui sincronizar no backend");
+      return;
     }
     toastSuccess("Núcleo da Empresa salvo com sucesso!");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -163,7 +230,7 @@ export default function AuthorityNucleusPage() {
 
         <div className="lg:col-span-4 xl:col-span-4 sticky top-6 space-y-6">
           <KnowledgeUploader
-            publicId="business-core-global"
+            publicId={BUSINESS_CORE_PUBLIC_ID}
             type="business-core"
             existingFilesJson={coreData?.knowledge_files_json}
             onUploadSuccess={() => refetch()}

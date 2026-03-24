@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { transitions, fadeUp } from "@/lib/motion";
 import { Markdown } from "@/components/markdown/Markdown";
 import { KnowledgeUploader } from "@/components/robot/KnowledgeUploader";
+import { useAuthStore } from "@/state/authStore";
 
 function formatRemaining(sec: number) {
   if (sec <= 0) return "Pronto";
@@ -49,6 +50,7 @@ const CORE_GROUPS = [
 export default function AuthorityAgentsRobotPage() {
   const { publicId = "" } = useParams();
   const queryClient = useQueryClient();
+  const authToken = useAuthStore((state) => state.token);
 
   const [isEditingCore, setIsEditingCore] = React.useState(false);
   const [resultModal, setResultModal] = React.useState<{ title: string; output: string } | null>(null);
@@ -59,7 +61,7 @@ export default function AuthorityAgentsRobotPage() {
   const coreQ = useQuery({
     queryKey: ["business-core", publicId],
     queryFn: () => api.robots.businessCore.get(publicId),
-    enabled: Boolean(publicId),
+    enabled: Boolean(authToken && publicId),
   });
 
   const patchCore = useMutation({

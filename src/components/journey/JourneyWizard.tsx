@@ -2,6 +2,7 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Particles } from "@/components/effects/Particles";
 import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/state/authStore";
 import { JOURNEY_STEPS } from "@/constants/journey";
 import type { BriefingIn } from "@/types/api";
 import type { JourneyStep, Achievement } from "@/types/journey";
@@ -19,6 +20,13 @@ import { transitions, fadeUp } from "@/lib/motion";
 import { useCreateRobot } from "@/hooks/useRobots";
 import { toastApiError, toastSuccess } from "@/lib/toast";
 import { CheckCircle2, Trophy, Timer, Star, Eye, EyeOff, Bot, Sparkles as SparkleIcon } from "lucide-react";
+
+const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
+
+function buildScopedStorageKey(userEmail?: string | null): string {
+  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
+  return `${STORAGE_KEY_PREFIX}:${normalized}`;
+}
 
 const TONE_OPTIONS = [
   { id: "simples", label: "Simples" },
@@ -97,6 +105,8 @@ function coachHint(stepId: string) {
 }
 
 export function JourneyWizard() {
+  const userEmail = useAuthStore((state) => state.user?.email ?? null);
+  const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
   const [state, dispatch] = React.useReducer(journeyReducer, undefined, initialJourneyState);
   const navigate = useNavigate();
   const createRobot = useCreateRobot();
@@ -231,7 +241,7 @@ export function JourneyWizard() {
       youtube: state.values.youtube?.trim() || "",
       tiktok: state.values.tiktok?.trim() || "",
     };
-    localStorage.setItem("ori_authority_nucleus_v1", JSON.stringify(corePayload));
+    localStorage.setItem(storageKey, JSON.stringify(corePayload));
 
     try {
       const created = await createRobot.mutateAsync(briefingPayload);
@@ -491,4 +501,5 @@ export function JourneyWizard() {
       </AnimatePresence>
     </div>
   );
+
 }

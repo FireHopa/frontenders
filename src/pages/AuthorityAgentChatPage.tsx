@@ -23,13 +23,20 @@ import { InstagramPublishModal, type InstagramPublishValues } from "@/components
 import { FacebookPublishModal, type FacebookPublishValues } from "@/components/facebook/FacebookPublishModal";
 import { YouTubePublishModal, type YouTubePublishValues } from "@/components/youtube/YouTubePublishModal";
 import { TikTokPublishModal, type TikTokPublishValues } from "@/components/tiktok/TikTokPublishModal";
-import { ArrowLeft, Loader2, Sparkles, RotateCcw, Printer, ChevronDown, FileText, Linkedin, Instagram, Facebook, Youtube } from "lucide-react";
+import { exportAuthorityFormat as exportFormat } from "@/lib/authorityExport";
+import { bobarService } from "@/services/bobar";
+import { ArrowLeft, Loader2, Sparkles, RotateCcw, Printer, ChevronDown, FileText, Linkedin, Instagram, Facebook, Youtube, FolderKanban } from "lucide-react";
 
-const STORAGE_KEY = "ori_authority_nucleus_v1";
+const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
 
-function loadStoredNucleus(): Record<string, any> {
+function buildScopedStorageKey(userEmail?: string | null): string {
+  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
+  return `${STORAGE_KEY_PREFIX}:${normalized}`;
+}
+
+function loadStoredNucleus(storageKey: string): Record<string, any> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -54,234 +61,13 @@ type ViewMode = "mindmap" | "result";
 // ============================================================================
 // MOTOR DE EXPORTAÇÃO INTELIGENTE (HTML, WhatsApp, TXT, MD)
 // ============================================================================
-export function exportFormat(raw: string, format: "md" | "whatsapp" | "txt" | "html"): string {
-  try {
-    const data = JSON.parse(raw);
-    if (!data || !Array.isArray(data.blocos)) throw new Error("Not JSON");
-
-    let out = "";
-
-    if (format === "html") {
-      out += `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">`;
-      if (data.titulo_da_tela) {
-        out += `<h1 style="color: #111; border-bottom: 2px solid #eee; padding-bottom: 10px;">${data.titulo_da_tela}</h1>`;
-      }
-      data.blocos.forEach((b: any) => {
-        if (b.tipo === "markdown") {
-          const html = b.conteudo.texto
-            .replace(/^### (.*$)/gim, '<h4 style="color: #444; margin-top: 16px;">$1</h4>')
-            .replace(/^## (.*$)/gim, '<h3 style="color: #333; margin-top: 20px;">$1</h3>')
-            .replace(/^# (.*$)/gim, '<h2 style="color: #222; margin-top: 24px;">$1</h2>')
-            .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-            .replace(/\n\n/gim, '</p><p style="margin-bottom: 12px;">')
-            .replace(/\n/gim, '<br>');
-          out += `<p style="margin-bottom: 12px;">${html}</p>`;
-        } else if (b.tipo === "highlight") {
-          out += `<div style="background-color: #f8f9fa; border-left: 4px solid #00c8e8; padding: 15px; margin: 20px 0; border-radius: 4px;">`;
-          if (b.conteudo.titulo) out += `<strong style="display: block; font-size: 16px; margin-bottom: 8px; color: #009eb8;">💡 ${b.conteudo.titulo}</strong>`;
-          out += `<span style="color: #333;">${b.conteudo.texto}</span></div>`;
-        } else if (b.tipo === "timeline" && b.conteudo.passos) {
-          out += `<ul style="list-style-type: none; padding-left: 0; margin: 20px 0;">`;
-          b.conteudo.passos.forEach((p: string) => {
-            const html = p.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-            out += `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;"><span style="position: absolute; left: 0; top: 0; color: #00c8e8;">•</span>${html}</li>`;
-          });
-          out += `</ul>`;
-        } else if (b.tipo === "quote") {
-          out += `<blockquote style="font-style: italic; border-left: 4px solid #ccc; padding: 10px 20px; margin: 20px 0; color: #555; background: #f9f9f9;">`;
-          out += `"${b.conteudo.texto}"`;
-          if (b.conteudo.autor) out += `<br><strong style="display: block; margin-top: 10px; font-style: normal; color: #333;">— ${b.conteudo.autor}</strong>`;
-          out += `</blockquote>`;
-        } else if (b.tipo === "faq" && b.conteudo.perguntas) {
-          out += `<div style="margin: 20px 0;">`;
-          b.conteudo.perguntas.forEach((q: any) => {
-            const htmlResp = q.resposta.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-            out += `<div style="margin-bottom: 15px;">`;
-            out += `<strong style="display: block; font-size: 15px; margin-bottom: 5px; color: #222;">❓ ${q.pergunta}</strong>`;
-            out += `<p style="margin: 0; padding-left: 24px; color: #444;">${htmlResp}</p>`;
-            out += `</div>`;
-          });
-          out += `</div>`;
-        } else if (b.tipo === "keyword_list" && b.conteudo.items) {
-          out += `<div style="margin: 20px 0;">`;
-          if (b.conteudo.titulo) out += `<h3 style="color:#222; margin-bottom: 8px;">${b.conteudo.titulo}</h3>`;
-          if (b.conteudo.limite_por_item) out += `<p style="margin:0 0 12px; color:#666; font-size:13px;">Limite: ${b.conteudo.limite_por_item}</p>`;
-          out += `<div style="display:grid; gap:8px;">`;
-          b.conteudo.items.forEach((item: string) => {
-            out += `<div style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; background:#fafafa;">${item}</div>`;
-          });
-          out += `</div></div>`;
-        } else if (b.tipo === "service_cards" && b.conteudo.items) {
-          out += `<div style="margin: 20px 0;">`;
-          if (b.conteudo.titulo) out += `<h3 style="color:#222; margin-bottom: 12px;">${b.conteudo.titulo}</h3>`;
-          out += `<div style="display:grid; gap:12px;">`;
-          b.conteudo.items.forEach((item: any) => {
-            out += `<div style="padding:14px; border:1px solid #e5e7eb; border-radius:16px; background:#fff;">`;
-            out += `<strong style="display:block; font-size:16px; margin-bottom:6px;">${item.nome}</strong>`;
-            out += `<p style="margin:0 0 10px; color:#444;">${item.descricao}</p>`;
-            if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) {
-              out += `<p style="margin:0; color:#666; font-size:13px;"><strong>Palavras-chave:</strong> ${item.palavras_chave.join(' • ')}</p>`;
-            }
-            out += `</div>`;
-          });
-          out += `</div></div>`;
-        } else if (b.tipo === "response_variations" && b.conteudo.items) {
-          out += `<div style="margin: 20px 0;">`;
-          if (b.conteudo.titulo) out += `<h3 style="color:#222; margin-bottom: 12px;">${b.conteudo.titulo}</h3>`;
-          out += `<div style="display:grid; gap:10px;">`;
-          b.conteudo.items.forEach((item: string) => {
-            out += `<div style="padding:12px 14px; border:1px solid #e5e7eb; border-radius:14px; background:#fafafa;">${item}</div>`;
-          });
-          out += `</div></div>`;
-        }
-      });
-      out += `</div>`;
-      return out;
-    }
-
-    if (format === "whatsapp") {
-      if (data.titulo_da_tela) out += `*${data.titulo_da_tela.toUpperCase()}*\n\n`;
-      data.blocos.forEach((b: any) => {
-        if (b.tipo === "markdown") {
-          const text = b.conteudo.texto
-            .replace(/^### (.*$)/gim, '*$1*')
-            .replace(/^## (.*$)/gim, '*$1*')
-            .replace(/^# (.*$)/gim, '*$1*')
-            .replace(/\*\*/g, '*');
-          out += `${text}\n\n`;
-        } else if (b.tipo === "highlight") {
-          out += `💡 *${(b.conteudo.titulo || 'Atenção').toUpperCase()}*\n_${b.conteudo.texto}_\n\n`;
-        } else if (b.tipo === "timeline" && b.conteudo.passos) {
-          b.conteudo.passos.forEach((p: string) => {
-            const text = p.replace(/\*\*/g, '*');
-            out += `🔹 ${text}\n`;
-          });
-          out += "\n";
-        } else if (b.tipo === "quote") {
-          out += `"${b.conteudo.texto}"\n`;
-          if (b.conteudo.autor) out += `— _${b.conteudo.autor}_\n`;
-          out += "\n";
-        } else if (b.tipo === "faq" && b.conteudo.perguntas) {
-          b.conteudo.perguntas.forEach((q: any) => {
-            const text = q.resposta.replace(/\*\*/g, '*');
-            out += `❓ *${q.pergunta}*\n${text}\n\n`;
-          });
-        } else if (b.tipo === "keyword_list" && b.conteudo.items) {
-          if (b.conteudo.titulo) out += `*${b.conteudo.titulo}*\n`;
-          b.conteudo.items.forEach((item: string) => { out += `• ${item}\n`; });
-          out += `\n`;
-        } else if (b.tipo === "service_cards" && b.conteudo.items) {
-          if (b.conteudo.titulo) out += `*${b.conteudo.titulo}*\n\n`;
-          b.conteudo.items.forEach((item: any) => {
-            out += `*${item.nome}*\n${item.descricao}\n`;
-            if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) out += `_Palavras-chave:_ ${item.palavras_chave.join(' • ')}\n`;
-            out += `\n`;
-          });
-        } else if (b.tipo === "response_variations" && b.conteudo.items) {
-          if (b.conteudo.titulo) out += `*${b.conteudo.titulo}*\n\n`;
-          b.conteudo.items.forEach((item: string, idx: number) => { out += `*Resposta ${idx + 1}*\n${item}\n\n`; });
-        }
-      });
-      return out.trim();
-    }
-
-    if (format === "txt") {
-      if (data.titulo_da_tela) out += `${data.titulo_da_tela.toUpperCase()}\n`;
-      if (data.titulo_da_tela) out += `${"=".repeat(data.titulo_da_tela.length)}\n\n`;
-      data.blocos.forEach((b: any) => {
-        if (b.tipo === "markdown") {
-          const text = b.conteudo.texto
-            .replace(/^### (.*$)/gim, '$1')
-            .replace(/^## (.*$)/gim, '$1')
-            .replace(/^# (.*$)/gim, '$1')
-            .replace(/\*\*/g, '');
-          out += `${text}\n\n`;
-        } else if (b.tipo === "highlight") {
-          out += `>> DICA: ${b.conteudo.titulo ? b.conteudo.titulo.toUpperCase() : 'ATENÇÃO'}\n${b.conteudo.texto}\n\n`;
-        } else if (b.tipo === "timeline" && b.conteudo.passos) {
-          b.conteudo.passos.forEach((p: string) => {
-            const text = p.replace(/\*\*/g, '');
-            out += `- ${text}\n`;
-          });
-          out += "\n";
-        } else if (b.tipo === "quote") {
-          out += `"${b.conteudo.texto}"\n`;
-          if (b.conteudo.autor) out += `— ${b.conteudo.autor}\n`;
-          out += "\n";
-        } else if (b.tipo === "faq" && b.conteudo.perguntas) {
-          b.conteudo.perguntas.forEach((q: any) => {
-            const text = q.resposta.replace(/\*\*/g, '');
-            out += `P: ${q.pergunta}\nR: ${text}\n\n`;
-          });
-        } else if (b.tipo === "keyword_list" && b.conteudo.items) {
-          if (b.conteudo.titulo) out += `${b.conteudo.titulo}\n`;
-          b.conteudo.items.forEach((item: string) => { out += `- ${item}\n`; });
-          out += `\n`;
-        } else if (b.tipo === "service_cards" && b.conteudo.items) {
-          if (b.conteudo.titulo) out += `${b.conteudo.titulo}\n\n`;
-          b.conteudo.items.forEach((item: any) => {
-            out += `${item.nome}\n${item.descricao}\n`;
-            if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) out += `Palavras-chave: ${item.palavras_chave.join(' | ')}\n`;
-            out += `\n`;
-          });
-        } else if (b.tipo === "response_variations" && b.conteudo.items) {
-          if (b.conteudo.titulo) out += `${b.conteudo.titulo}\n\n`;
-          b.conteudo.items.forEach((item: string, idx: number) => { out += `Resposta ${idx + 1}:\n${item}\n\n`; });
-        }
-      });
-      return out.trim();
-    }
-
-    if (data.titulo_da_tela) out += `# ${data.titulo_da_tela}\n\n`;
-    data.blocos.forEach((b: any) => {
-      if (b.tipo === "markdown") {
-        out += `${b.conteudo.texto}\n\n`;
-      } else if (b.tipo === "highlight") {
-        out += `💡 **${b.conteudo.titulo || 'Atenção'}**\n${b.conteudo.texto}\n\n`;
-      } else if (b.tipo === "timeline" && b.conteudo.passos) {
-        b.conteudo.passos.forEach((p: string) => (out += `• ${p}\n`));
-        out += "\n";
-      } else if (b.tipo === "quote") {
-        out += `> "${b.conteudo.texto}"\n`;
-        if (b.conteudo.autor) out += `> — ${b.conteudo.autor}\n`;
-        out += "\n";
-      } else if (b.tipo === "faq" && b.conteudo.perguntas) {
-        b.conteudo.perguntas.forEach((q: any) => {
-          out += `**P: ${q.pergunta}**\nR: ${q.resposta}\n\n`;
-        });
-      } else if (b.tipo === "keyword_list" && b.conteudo.items) {
-        if (b.conteudo.titulo) out += `## ${b.conteudo.titulo}\n\n`;
-        b.conteudo.items.forEach((item: string) => { out += `- ${item}\n`; });
-        out += `\n`;
-      } else if (b.tipo === "service_cards" && b.conteudo.items) {
-        if (b.conteudo.titulo) out += `## ${b.conteudo.titulo}\n\n`;
-        b.conteudo.items.forEach((item: any) => {
-          out += `### ${item.nome}\n${item.descricao}\n\n`;
-          if (Array.isArray(item.palavras_chave) && item.palavras_chave.length) out += `**Palavras-chave:** ${item.palavras_chave.join(' • ')}\n\n`;
-        });
-      } else if (b.tipo === "response_variations" && b.conteudo.items) {
-        if (b.conteudo.titulo) out += `## ${b.conteudo.titulo}\n\n`;
-        b.conteudo.items.forEach((item: string, idx: number) => {
-          out += `### Resposta ${idx + 1}\n${item}\n\n`;
-        });
-      }
-    });
-    return out.trim();
-  } catch {
-    if (format === "html") return `<pre style="white-space: pre-wrap; font-family: sans-serif;">${raw}</pre>`;
-    if (format === "txt") return raw.replace(/\*\*/g, "").replace(/^#+ /gm, "");
-    if (format === "whatsapp") return raw.replace(/\*\*/g, "*").replace(/^#+ /gm, "*");
-    return raw;
-  }
-}
-
 export default function AuthorityAgentChatPage() {
   const nav = useNavigate();
   const { agentKey = "" } = useParams<{ agentKey: string }>();
   const agent = authorityAgentByKey(agentKey);
 
   const clientId = React.useMemo(() => getClientId(), []);
-  const nucleus = React.useMemo(() => (typeof window === "undefined" ? {} : loadStoredNucleus()), []);
+  const nucleus = React.useMemo(() => (typeof window === "undefined" ? {} : loadStoredNucleus(storageKey)), []);
 
   const [mode, setMode] = React.useState<ViewMode>("mindmap");
   const [resultMd, setResultMd] = React.useState<string>("");
@@ -307,7 +93,9 @@ export default function AuthorityAgentChatPage() {
   const [customTheme, setCustomTheme] = React.useState("");
   
   const [showDownloadMenu, setShowDownloadMenu] = React.useState(false);
+  const [isSendingToBobar, setIsSendingToBobar] = React.useState(false);
   const { user } = useAuthStore();
+  const storageKey = React.useMemo(() => buildScopedStorageKey(user?.email), [user?.email]);
 
   const filled = React.useMemo(() => {
     const keys = Object.keys(nucleus ?? {});
@@ -1019,7 +807,18 @@ export default function AuthorityAgentChatPage() {
                     </AnimatePresence>
                   </div>
                   
-                  <Button 
+                                    <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-card shadow-sm rounded-xl h-9 px-4"
+                    onClick={handleSendToBobar}
+                    disabled={isSendingToBobar}
+                  >
+                    {isSendingToBobar ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderKanban className="h-4 w-4 mr-2" />}
+                    Bobar
+                  </Button>
+
+<Button 
                     size="sm" 
                     variant="outline"
                     className="bg-card shadow-sm rounded-xl h-9 px-4" 

@@ -128,9 +128,86 @@ export const INSTAGRAM_TASKS: AuthorityTask[] = [
 ];
 
 export const TIKTOK_TASKS: AuthorityTask[] = [
-  { title: "Roteiro de Vídeo Curto (Trend/Dinâmico)", inputMode: "theme", aiSuggestions: true },
-  { title: "Roteiro Educativo / Resposta a Dúvida (AEO)", inputMode: "theme", aiSuggestions: true },
-  { title: "Otimização de Bio e Identidade do Perfil", inputMode: "direct", aiSuggestions: false }
+  {
+    title: "Bio estratégica (AEO, AIO E GEO)",
+    description: "Reposiciona o perfil para deixar claro quem você ajuda, o que entrega, qual é o diferencial e qual ação a pessoa deve tomar ao entrar no TikTok.",
+    inputMode: "direct",
+    aiSuggestions: false,
+  },
+  {
+    title: "Roteiros",
+    description: "Transforma o tema em um roteiro gravável com foco em retenção, clareza e ritmo de TikTok, escolhendo o formato mais forte para viralização, autoridade ou conversão.",
+    inputMode: "theme",
+    aiSuggestions: true,
+    inputLabel: "Qual é o tema principal do vídeo?",
+    inputPlaceholder: "Ex: Por que empresas boas continuam invisíveis no TikTok mesmo postando todo dia...",
+    submitLabel: "Gerar roteiro",
+    extraFields: [
+      {
+        key: "video_format",
+        label: "Formato do vídeo",
+        type: "select",
+        placeholder: "Escolha o formato do vídeo",
+        options: VIDEO_FORMAT_OPTIONS,
+        required: true,
+        aiRecommended: true,
+      },
+    ],
+  },
+  {
+    title: "Legendas estratégicas",
+    description: "Cria legendas com intenção clara de descoberta, contexto e conversão, reforçando o tema do vídeo sem repetir o que já foi dito na gravação.",
+    inputMode: "theme",
+    aiSuggestions: false,
+    inputLabel: "Qual é o tema principal do vídeo?",
+    inputPlaceholder: "Ex: O erro que faz um vídeo promissor morrer nos primeiros segundos",
+    submitLabel: "Gerar legendas",
+    extraFields: [
+      {
+        key: "content_type",
+        label: "Esse conteúdo é",
+        type: "select",
+        placeholder: "Escolha o tipo de conteúdo",
+        options: [
+          { value: "video_curto", label: "vídeo curto" },
+          { value: "trend_adaptada", label: "trend adaptada ao nicho" },
+          { value: "educativo", label: "educativo" },
+          { value: "opiniao", label: "opinião" },
+          { value: "react", label: "react" },
+          { value: "storytelling", label: "storytelling" },
+        ],
+        required: true,
+      },
+      {
+        key: "content_goal",
+        label: "O objetivo principal é",
+        type: "select",
+        placeholder: "Escolha o objetivo principal",
+        options: [
+          { value: "gerar_descoberta", label: "gerar descoberta" },
+          { value: "gerar_autoridade", label: "gerar autoridade" },
+          { value: "gerar_conversao", label: "gerar conversão" },
+          { value: "gerar_interacao", label: "gerar interação" },
+        ],
+        required: true,
+      },
+    ],
+  },
+  {
+    title: "Caçador de trends",
+    description: "Analisa o núcleo da empresa, cruza com sinais reais do TikTok e encontra trends, formatos, temas e ganchos com aderência ao nicho — sem forçar trend errada só porque está viral.",
+    inputMode: "direct",
+    aiSuggestions: false,
+  },
+  {
+    title: "Hooks de abertura",
+    description: "Cria aberturas curtas e fortes para segurar os primeiros segundos do vídeo, com foco em curiosidade, diagnóstico, contraste, erro ou promessa específica.",
+    inputMode: "theme",
+    aiSuggestions: true,
+    inputLabel: "Sobre qual tema você quer criar hooks?",
+    inputPlaceholder: "Ex: Como transformar conteúdo técnico em vídeo curto que prende atenção",
+    submitLabel: "Gerar hooks",
+  },
 ];
 
 export const LINKEDIN_TASKS: AuthorityTask[] = [

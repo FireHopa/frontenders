@@ -172,9 +172,15 @@ export function buildSkyBobFeedbackPreferences(workspace: SkyBobWorkspace): Reco
 
   const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
 
+  const seenHooks = unique([
+    ...Object.values(workspace.hooks_feedback).map((entry) => entry.item.hook),
+    ...(workspace.study?.hooks || []).map((hook) => hook.hook),
+  ]);
+
   return {
     liked_hooks: likedHooks.map((entry) => entry.item.hook),
     disliked_hooks: dislikedHooks.map((entry) => entry.item.hook),
+    seen_hooks: seenHooks,
     liked_hook_angles: unique(likedHooks.map((entry) => entry.item.angle)),
     disliked_hook_angles: unique(dislikedHooks.map((entry) => entry.item.angle)),
     liked_hook_formats: unique(likedHooks.map((entry) => entry.item.format_hint)),

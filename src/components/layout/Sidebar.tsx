@@ -49,7 +49,7 @@ const items: Item[] = [
   { to: "/competition", label: "Análise da Concorrência", Icon: Swords },
   { to: "/image-engine", label: "Motor de Imagem", Icon: ImageIcon },
   { to: "/skybob", label: "SkyBob", Icon: Rocket },
-  { to: "/projects", label: "Projetos", Icon: FolderKanban },
+  { to: "/bobar", label: "Bobar", Icon: FolderKanban },
   { to: "/materials", label: "Materiais de Apoio", Icon: BookOpen },
   { to: "/video", label: "Video Aula", Icon: Video },
 ];
