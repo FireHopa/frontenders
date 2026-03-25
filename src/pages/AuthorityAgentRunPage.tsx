@@ -48,6 +48,7 @@ import { TikTokPublishModal, type TikTokPublishValues } from "@/components/tikto
 import { GoogleBusinessApplyModal, parseGoogleBusinessPreview } from "@/components/authority/GoogleBusinessApplyModal";
 import { exportAuthorityFormat as exportFormat } from "@/lib/authorityExport";
 import { bobarService } from "@/services/bobar";
+import { buildAuthorityImportPayload } from "@/lib/bobarImported";
 
 const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
 
@@ -963,12 +964,7 @@ export default function AuthorityAgentRunPage() {
 
     setIsSendingToBobar(true);
     try {
-      await bobarService.importCard({
-        title: agent.name,
-        content_text: result.output_text,
-        source_kind: "authority_agent",
-        source_label: agent.name,
-      });
+      await bobarService.importCard(buildAuthorityImportPayload(result.output_text, agent));
       toastSuccess("Resultado enviado para o Bobar.");
     } catch (error) {
       toastApiError(error, "Não foi possível enviar este resultado para o Bobar");

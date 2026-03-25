@@ -1,8 +1,11 @@
-
 import * as React from "react";
+import { createPortal } from "react-dom";
 import {
+  ArrowRight,
   Check,
   ChevronDown,
+  CircleAlert,
+  Columns3,
   FilePlus2,
   FolderKanban,
   GitBranch,
@@ -11,23 +14,33 @@ import {
   LayoutTemplate,
   Link2,
   Loader2,
+  MousePointerClick,
   Pencil,
   Plus,
   Save,
   Sparkles,
   Trash2,
   Unlink,
-  Wand2,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { exportAuthorityFormat } from "@/lib/authorityExport";
-import { toastApiError, toastSuccess } from "@/lib/toast";
+import { toastApiError, toastInfo, toastSuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { BobarImportsPanel } from "@/components/bobar/BobarImportsPanel";
+import { isAuthorityImportCard } from "@/lib/bobarImported";
 import {
   bobarService,
   type BobarBoard,
@@ -58,6 +71,13 @@ type CardEditorDraft = {
   note: string;
 };
 
+type ChecklistItem = {
+  id: string;
+  text: string;
+  checked: boolean;
+};
+
+
 type DropdownOption = {
   value: string;
   label: string;
@@ -68,6 +88,14 @@ type DragCardState = {
   cardId: number;
   fromColumnId: number;
 };
+
+type BobarViewMode = "quadro" | "importados";
+
+type ColumnDialogState = { mode: "create"; column: null } | { mode: "rename"; column: BobarColumn };
+
+type DeleteDialogState =
+  | { type: "column"; column: BobarColumn }
+  | { type: "card"; card: BobarCard };
 
 const CARD_TYPE_OPTIONS: Array<{ value: BobarCardType; label: string }> = [
   { value: "manual", label: "Manual" },
@@ -87,7 +115,81 @@ function newEdgeId() {
 }
 
 function normalizeText(value: string | null | undefined) {
-  return String(value || "").replace(/\r\n/g, "\n").trim();
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+}
+
+function newChecklistItemId() {
+  return `check-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createChecklistItem(text = "", checked = false): ChecklistItem {
+  return {
+    id: newChecklistItemId(),
+    text,
+    checked,
+  };
+}
+
+function normalizeChecklistItems(items: ChecklistItem[]) {
+  const normalized = items.map((item) => ({
+    id: item.id || newChecklistItemId(),
+    text: String(item.text || ""),
+    checked: Boolean(item.checked),
+  }));
+
+  return normalized.length ? normalized : [createChecklistItem()];
+}
+
+function parseChecklistContent(value: string | null | undefined) {
+  const lines = String(value || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+
+  const items: ChecklistItem[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const taskMatch = line.match(/^(?:[-*•]\s*)?\[(x|X| )\]\s+(.*)$/);
+    if (taskMatch) {
+      items.push(createChecklistItem(taskMatch[2], /x/i.test(taskMatch[1])));
+      continue;
+    }
+
+    const bulletMatch = line.match(/^(?:[-*•]\s+|\d+[.)]\s+)(.*)$/);
+    if (bulletMatch) {
+      items.push(createChecklistItem(bulletMatch[1], false));
+      continue;
+    }
+
+    items.push(createChecklistItem(line, false));
+  }
+
+  return normalizeChecklistItems(items);
+}
+
+function serializeChecklistContent(items: ChecklistItem[]) {
+  return items
+    .map((item) => ({
+      checked: Boolean(item.checked),
+      text: String(item.text || "").trim(),
+    }))
+    .filter((item) => item.text)
+    .map((item) => `- [${item.checked ? "x" : " "}] ${item.text}`)
+    .join("\n");
+}
+
+function getChecklistStats(items: ChecklistItem[]) {
+  const validItems = items.filter((item) => item.text.trim());
+  const checked = validItems.filter((item) => item.checked).length;
+  return {
+    total: validItems.length,
+    checked,
+    pending: Math.max(validItems.length - checked, 0),
+  };
 }
 
 function normalizeFlowNode(raw: Partial<BobarFlowNode>, index: number): BobarFlowNode {
@@ -140,29 +242,39 @@ function buildSequentialEdges(nodes: BobarFlowNode[]): BobarFlowEdge[] {
 function flowToContentText(flow: BobarFlowchart) {
   return flow.nodes
     .map((node, index) => {
-      const header = [node.time || "", node.title || `Bloco ${index + 1}`].filter(Boolean).join(" · ");
+      const header = [node.time || "", node.title || `Bloco ${index + 1}`]
+        .filter(Boolean)
+        .join(" · ");
       return [header, normalizeText(node.content)].filter(Boolean).join("\n");
     })
     .join("\n\n");
 }
 
-function parseFlowchart(structureJson?: string | null, fallbackTitle = "Novo fluxo", fallbackContent = ""): BobarFlowchart {
+function parseFlowchart(
+  structureJson?: string | null,
+  fallbackTitle = "Novo fluxo",
+  fallbackContent = "",
+): BobarFlowchart {
   try {
     const parsed = JSON.parse(structureJson || "{}");
     const rawNodes = Array.isArray(parsed?.nodes) ? parsed.nodes : [];
-    const nodes = rawNodes.map((node: unknown, index: number) => normalizeFlowNode((node || {}) as Partial<BobarFlowNode>, index));
-    const validIds = new Set(nodes.map((node) => node.id));
+    const nodes: BobarFlowNode[] = rawNodes.map((node: unknown, index: number) =>
+      normalizeFlowNode((node || {}) as Partial<BobarFlowNode>, index),
+    );
+    const validIds = new Set<string>(nodes.map((node) => node.id));
     const rawEdges = Array.isArray(parsed?.edges) ? parsed.edges : [];
-    const edges = dedupeEdges(
+    const edges: BobarFlowEdge[] = dedupeEdges(
       rawEdges
-        .map((edge: unknown, index: number) => normalizeFlowEdge((edge || {}) as Partial<BobarFlowEdge>, index))
-        .filter((edge) => validIds.has(edge.source) && validIds.has(edge.target))
+        .map((edge: unknown, index: number) =>
+          normalizeFlowEdge((edge || {}) as Partial<BobarFlowEdge>, index),
+        )
+        .filter((edge: BobarFlowEdge) => validIds.has(edge.source) && validIds.has(edge.target)),
     );
 
     if (nodes.length) {
       return {
         nodes,
-        edges: edges.length ? edges : buildSequentialEdges(nodes),
+        edges,
         meta: typeof parsed?.meta === "object" && parsed?.meta ? parsed.meta : { grid: 32 },
       };
     }
@@ -181,17 +293,23 @@ function parseFlowchart(structureJson?: string | null, fallbackTitle = "Novo flu
   const nodes =
     chunks.length > 0
       ? chunks.slice(0, 18).map((chunk, index) => {
-          const lines = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
+          const lines = chunk
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
           const head = lines[0] || fallbackTitle;
           const timeMatch = head.match(/(\d+\s*(?:-|a|até|to)\s*\d+\s*s|\d+\s*s)/i);
           return normalizeFlowNode(
             {
-              title: timeMatch ? head.replace(String(timeMatch[1]), "").replace(/^[-–·:\s]+|[-–·:\s]+$/g, "") || head : head.slice(0, 70),
+              title: timeMatch
+                ? head.replace(String(timeMatch[1]), "").replace(/^[-–·:\s]+|[-–·:\s]+$/g, "") ||
+                  head
+                : head.slice(0, 70),
               time: timeMatch ? String(timeMatch[1]).replace(/\s+/g, "") : "",
               content: lines.slice(1).join("\n") || chunk,
               kind: index === 0 ? "hook" : index === chunks.length - 1 ? "cta" : "step",
             },
-            index
+            index,
           );
         })
       : [
@@ -201,13 +319,13 @@ function parseFlowchart(structureJson?: string | null, fallbackTitle = "Novo flu
               content: fallbackContent,
               kind: "step",
             },
-            0
+            0,
           ),
         ];
 
   return {
     nodes,
-    edges: buildSequentialEdges(nodes),
+    edges: [],
     meta: { grid: 32 },
   };
 }
@@ -229,9 +347,9 @@ function cloneFlow(flow?: BobarFlowchart | null): BobarFlowchart {
           source: idMap.get(edge.source) || edge.source,
           target: idMap.get(edge.target) || edge.target,
         },
-        index
-      )
-    )
+        index,
+      ),
+    ),
   );
   return {
     nodes,
@@ -245,7 +363,7 @@ function buildFlowTemplate(
   label: string,
   description: string,
   title: string,
-  nodes: Array<Partial<BobarFlowNode>>
+  nodes: Array<Partial<BobarFlowNode>>,
 ): FlowTemplate {
   const normalizedNodes = nodes.map((node, index) =>
     normalizeFlowNode(
@@ -258,8 +376,8 @@ function buildFlowTemplate(
         x: Number.isFinite(Number(node.x)) ? Number(node.x) : 80 + index * 280,
         y: Number.isFinite(Number(node.y)) ? Number(node.y) : 80 + (index % 2) * 160,
       },
-      index
-    )
+      index,
+    ),
   );
 
   const structure: BobarFlowchart = {
@@ -287,11 +405,31 @@ const CARD_TEMPLATES: FlowTemplate[] = [
     "Hook curto com dor, prova e CTA.",
     "Roteiro UGC · Hook 30s",
     [
-      { time: "0-3s", title: "Hook", kind: "hook", content: "Abra com uma quebra forte, curiosidade ou contraste visual." },
-      { time: "4-8s", title: "Dor", kind: "step", content: "Mostre o problema principal da audiência." },
-      { time: "9-16s", title: "Prova", kind: "support", content: "Mostre evidência, exemplo ou resultado real." },
-      { time: "17-30s", title: "CTA", kind: "cta", content: "Finalize com um próximo passo claro." },
-    ]
+      {
+        time: "0-3s",
+        title: "Hook",
+        kind: "hook",
+        content: "Abra com uma quebra forte, curiosidade ou contraste visual.",
+      },
+      {
+        time: "4-8s",
+        title: "Dor",
+        kind: "step",
+        content: "Mostre o problema principal da audiência.",
+      },
+      {
+        time: "9-16s",
+        title: "Prova",
+        kind: "support",
+        content: "Mostre evidência, exemplo ou resultado real.",
+      },
+      {
+        time: "17-30s",
+        title: "CTA",
+        kind: "cta",
+        content: "Finalize com um próximo passo claro.",
+      },
+    ],
   ),
   buildFlowTemplate(
     "storysell-45s",
@@ -299,11 +437,31 @@ const CARD_TEMPLATES: FlowTemplate[] = [
     "Narrativa com conflito, virada e fechamento comercial.",
     "Storysell · 45s",
     [
-      { time: "0-5s", title: "Abertura", kind: "hook", content: "Entre já no contexto ou conflito." },
-      { time: "6-15s", title: "Tensão", kind: "step", content: "Aumente o peso do problema ou desafio." },
-      { time: "16-28s", title: "Virada", kind: "support", content: "Mostre o ponto de descoberta da solução." },
-      { time: "29-45s", title: "Resultado + CTA", kind: "cta", content: "Feche com transformação e chamada." },
-    ]
+      {
+        time: "0-5s",
+        title: "Abertura",
+        kind: "hook",
+        content: "Entre já no contexto ou conflito.",
+      },
+      {
+        time: "6-15s",
+        title: "Tensão",
+        kind: "step",
+        content: "Aumente o peso do problema ou desafio.",
+      },
+      {
+        time: "16-28s",
+        title: "Virada",
+        kind: "support",
+        content: "Mostre o ponto de descoberta da solução.",
+      },
+      {
+        time: "29-45s",
+        title: "Resultado + CTA",
+        kind: "cta",
+        content: "Feche com transformação e chamada.",
+      },
+    ],
   ),
   {
     key: "pipeline-conteudo",
@@ -338,13 +496,13 @@ const CARD_TEMPLATES: FlowTemplate[] = [
   },
 ];
 
-function buildEdgePath(source: BobarFlowNode, target: BobarFlowNode) {
-  const startX = source.x + 256;
-  const startY = source.y + 62;
-  const endX = target.x;
-  const endY = target.y + 62;
+function buildConnectionPath(startX: number, startY: number, endX: number, endY: number) {
   const deltaX = Math.max(80, Math.abs(endX - startX) * 0.42);
   return `M ${startX} ${startY} C ${startX + deltaX} ${startY}, ${endX - deltaX} ${endY}, ${endX} ${endY}`;
+}
+
+function buildEdgePath(source: BobarFlowNode, target: BobarFlowNode) {
+  return buildConnectionPath(source.x + 256, source.y + 62, target.x, target.y + 62);
 }
 
 function clampPosition(value: number, min: number, max: number) {
@@ -361,8 +519,8 @@ function autoArrangeFlow(flow: BobarFlowchart) {
         x: 80 + (index % columns) * 300,
         y: 80 + Math.floor(index / columns) * 190,
       },
-      index
-    )
+      index,
+    ),
   );
   return { ...flow, nodes };
 }
@@ -421,23 +579,30 @@ function typeBadgeClasses(cardType?: string | null) {
 function countImportedCards(board: BobarBoard | null) {
   if (!board) return 0;
   return board.columns.reduce(
-    (acc, column) => acc + column.cards.filter((card) => card.source_kind && card.source_kind !== "manual").length,
-    0
+    (acc, column) => acc + column.cards.filter((card) => isAuthorityImportCard(card)).length,
+    0,
   );
 }
 
 function countFlowchartCards(board: BobarBoard | null) {
   if (!board) return 0;
   return board.columns.reduce(
-    (acc, column) => acc + column.cards.filter((card) => String(card.card_type || "").toLowerCase() === "fluxograma").length,
-    0
+    (acc, column) =>
+      acc +
+      column.cards.filter((card) => String(card.card_type || "").toLowerCase() === "fluxograma")
+        .length,
+    0,
   );
 }
 
 function countTemplateCards(board: BobarBoard | null) {
   if (!board) return 0;
   return board.columns.reduce((acc, column) => {
-    return acc + column.cards.filter((card) => Boolean(readTemplateKeyFromStructure(card.structure_json))).length;
+    return (
+      acc +
+      column.cards.filter((card) => Boolean(readTemplateKeyFromStructure(card.structure_json)))
+        .length
+    );
   }, 0);
 }
 
@@ -452,10 +617,29 @@ function formatDate(value?: string | null) {
 }
 
 function buildSnippet(card: BobarCard) {
-  if (String(card.card_type || "").toLowerCase() === "fluxograma") {
+  const cardType = String(card.card_type || "").toLowerCase();
+
+  if (cardType === "fluxograma") {
     const flow = parseFlowchart(card.structure_json, card.title, card.content_text);
-    const titles = flow.nodes.map((node) => node.time || node.title).filter(Boolean).slice(0, 3);
+    const titles = flow.nodes
+      .map((node) => node.time || node.title)
+      .filter(Boolean)
+      .slice(0, 3);
     if (titles.length) return titles.join(" → ") + (flow.nodes.length > 3 ? "…" : "");
+  }
+
+  if (cardType === "checklist") {
+    const items = parseChecklistContent(card.content_text);
+    const stats = getChecklistStats(items);
+    const preview = items
+      .map((item) => item.text.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(" • ");
+
+    if (stats.total) {
+      return `${stats.checked}/${stats.total} concluídos${preview ? ` • ${preview}` : ""}`;
+    }
   }
 
   const cleanText = normalizeText(card.content_text);
@@ -489,6 +673,21 @@ function firstCardId(board: BobarBoard | null) {
     if (column.cards[0]) return column.cards[0].id;
   }
   return null;
+}
+
+function filterBoardCards(board: BobarBoard | null, predicate: (card: BobarCard) => boolean) {
+  if (!board) return null;
+
+  const columns = board.columns.map((column) => ({
+    ...column,
+    cards: column.cards.filter(predicate),
+  }));
+
+  return {
+    ...board,
+    columns,
+    total_cards: columns.reduce((acc, column) => acc + column.cards.length, 0),
+  };
 }
 
 function shallowEqualDraft(a: CardEditorDraft | null, b: CardEditorDraft | null) {
@@ -542,7 +741,11 @@ function SelectField({
 
   return (
     <div className="space-y-2" ref={wrapperRef}>
-      {label ? <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">{label}</div> : null}
+      {label ? (
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+          {label}
+        </div>
+      ) : null}
       <div className="relative">
         <button
           type="button"
@@ -551,16 +754,25 @@ function SelectField({
           className={cn(
             "flex h-12 w-full items-center justify-between rounded-2xl border px-4 text-left shadow-[0_16px_40px_rgba(0,0,0,0.2)] transition",
             "border-cyan-400/30 bg-[#0a1225] text-white hover:border-cyan-300/50 hover:bg-[#0d1830]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
           <div className="min-w-0">
-            <div className={cn("truncate text-sm font-medium", active ? "text-white" : "text-white/45")}>
+            <div
+              className={cn(
+                "truncate text-sm font-medium",
+                active ? "text-white" : "text-white/45",
+              )}
+            >
               {active?.label || placeholder || "Selecionar"}
             </div>
-            {active?.description ? <div className="truncate text-xs text-white/45">{active.description}</div> : null}
+            {active?.description ? (
+              <div className="truncate text-xs text-white/45">{active.description}</div>
+            ) : null}
           </div>
-          <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/55 transition", open && "rotate-180")} />
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 text-white/55 transition", open && "rotate-180")}
+          />
         </button>
 
         {open ? (
@@ -578,14 +790,22 @@ function SelectField({
                     }}
                     className={cn(
                       "flex w-full items-start justify-between gap-3 rounded-2xl px-3 py-3 text-left transition",
-                      activeOption ? "bg-cyan-400/12 text-cyan-100" : "text-white/80 hover:bg-white/5"
+                      activeOption
+                        ? "bg-cyan-400/12 text-cyan-100"
+                        : "text-white/80 hover:bg-white/5",
                     )}
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium">{option.label}</div>
-                      {option.description ? <div className="mt-1 text-xs leading-5 text-white/45">{option.description}</div> : null}
+                      {option.description ? (
+                        <div className="mt-1 text-xs leading-5 text-white/45">
+                          {option.description}
+                        </div>
+                      ) : null}
                     </div>
-                    {activeOption ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" /> : null}
+                    {activeOption ? (
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
+                    ) : null}
                   </button>
                 );
               })}
@@ -609,9 +829,13 @@ function StatChip({
   return (
     <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.2)]">
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-200">{icon}</div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-200">
+          {icon}
+        </div>
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">{label}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+            {label}
+          </div>
           <div className="mt-1 text-2xl font-black text-white">{value}</div>
         </div>
       </div>
@@ -619,13 +843,7 @@ function StatChip({
   );
 }
 
-function EmptyState({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
+function EmptyState({ title, description }: { title: string; description: string }) {
   return (
     <div className="rounded-[1.8rem] border border-dashed border-white/10 bg-white/[0.03] px-6 py-10 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-white/40">
@@ -633,6 +851,47 @@ function EmptyState({
       </div>
       <div className="mt-4 text-lg font-semibold text-white">{title}</div>
       <div className="mt-2 text-sm leading-6 text-white/55">{description}</div>
+    </div>
+  );
+}
+
+function GuideStep({
+  step,
+  title,
+  description,
+}: {
+  step: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-[1.7rem] border border-white/10 bg-white/[0.035] p-4">
+      <div className="mb-3 inline-flex h-9 min-w-9 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+        {step}
+      </div>
+      <div className="text-sm font-semibold text-white">{title}</div>
+      <div className="mt-2 text-sm leading-6 text-white/55">{description}</div>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  emphasized = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  emphasized?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <span className="text-white/45">{label}</span>
+      <span
+        className={cn("min-w-0 text-right text-white/72", emphasized && "font-semibold text-white")}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -664,14 +923,18 @@ function ColumnLane({
   onDragColumn: (columnId: number) => void;
   onDropColumn: (columnId: number) => void;
 }) {
-  const isDropActive = dragState && dragOverColumnId === column.id && dragState.fromColumnId !== column.id;
+  const isDropActive =
+    dragState && dragOverColumnId === column.id && dragState.fromColumnId !== column.id;
+  const selectedCount = column.cards.filter((card) => card.id === selectedCardId).length;
 
   return (
     <Card
       variant="glass"
       className={cn(
-        "min-w-[320px] max-w-[320px] rounded-[2rem] border bg-[#07101f]/75 backdrop-blur",
-        isDropActive ? "border-cyan-300/60 shadow-[0_0_0_1px_rgba(34,211,238,0.28),0_24px_48px_rgba(8,145,178,0.18)]" : "border-cyan-400/12"
+        "flex w-[min(340px,82vw)] min-w-[296px] max-w-[340px] snap-start flex-col overflow-hidden rounded-[2rem] border bg-[#07101f]/80 backdrop-blur",
+        isDropActive
+          ? "border-cyan-300/60 shadow-[0_0_0_1px_rgba(34,211,238,0.28),0_24px_48px_rgba(8,145,178,0.18)]"
+          : "border-cyan-400/12",
       )}
       onDragOver={(event) => {
         if (!dragState) return;
@@ -690,45 +953,70 @@ function ColumnLane({
         onDropColumn(column.id);
       }}
     >
-      <CardHeader className="pb-4">
+      <CardHeader className="border-b border-white/8 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-3 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-200">
                 <FolderKanban className="h-5 w-5" />
               </div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/75">Coluna</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/75">
+                Coluna
+              </div>
             </div>
-            <CardTitle className="break-words text-[1.7rem] leading-tight text-white">{column.name}</CardTitle>
-            <CardDescription className="mt-2 text-white/45">
-              {column.cards.length} {column.cards.length === 1 ? "card" : "cards"}
+            <CardTitle className="break-words text-[1.45rem] leading-tight text-white">
+              {column.name}
+            </CardTitle>
+            <CardDescription className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-white/45">
+              <span>
+                {column.cards.length} {column.cards.length === 1 ? "card" : "cards"}
+              </span>
+              {selectedCount ? (
+                <span className="text-cyan-100/80">card selecionado aqui</span>
+              ) : null}
             </CardDescription>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" size="icon" className="h-10 w-10 rounded-2xl" onClick={() => onRenameColumn(column)}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-2xl"
+              onClick={() => onRenameColumn(column)}
+              aria-label={`Renomear coluna ${column.name}`}
+            >
               <Pencil className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="h-10 w-10 rounded-2xl" onClick={() => onDeleteColumn(column)}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-2xl"
+              onClick={() => onDeleteColumn(column)}
+              aria-label={`Excluir coluna ${column.name}`}
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
-        <Button className="h-10 w-full rounded-2xl" variant="outline" onClick={() => onCreateCard(column.id)}>
+      <CardContent className="flex flex-1 flex-col gap-3 pt-5">
+        <Button
+          className="h-10 w-full rounded-2xl"
+          variant="outline"
+          onClick={() => onCreateCard(column.id)}
+        >
           <Plus className="h-4 w-4" />
-          Novo card
+          Novo card nesta coluna
         </Button>
 
         {isDropActive ? (
           <div className="rounded-[1.6rem] border border-dashed border-cyan-300/50 bg-cyan-400/8 px-4 py-5 text-center text-sm font-medium text-cyan-100">
-            Solte aqui para mover o card para {column.name}.
+            Solte aqui para mover o card para <span className="break-words">{column.name}</span>.
           </div>
         ) : null}
 
-        <div className="space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           {column.cards.length ? (
             column.cards.map((card) => {
               const active = selectedCardId === card.id;
@@ -742,24 +1030,33 @@ function ColumnLane({
                   onDragEnd={onEndDragCard}
                   onClick={() => onSelectCard(card.id)}
                   className={cn(
-                    "w-full rounded-[1.7rem] border p-4 text-left shadow-[0_16px_34px_rgba(0,0,0,0.22)] transition",
-                    active ? "border-cyan-400/50 bg-cyan-400/10 ring-2 ring-cyan-400/25" : "border-white/10 bg-white/[0.045] hover:bg-white/[0.07]",
-                    dragging && "opacity-45"
+                    "w-full overflow-hidden rounded-[1.7rem] border p-4 text-left shadow-[0_16px_34px_rgba(0,0,0,0.22)] transition",
+                    active
+                      ? "border-cyan-400/50 bg-cyan-400/10 ring-2 ring-cyan-400/25"
+                      : "border-white/10 bg-white/[0.045] hover:bg-white/[0.07]",
+                    dragging && "opacity-45",
                   )}
                 >
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <Badge className={cn("rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]", typeBadgeClasses(card.card_type))}>
+                        <Badge
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
+                            typeBadgeClasses(card.card_type),
+                          )}
+                        >
                           {typeLabel(card.card_type)}
                         </Badge>
                         {card.source_label ? (
-                          <Badge className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/65">
+                          <Badge className="max-w-full truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/65">
                             {card.source_label}
                           </Badge>
                         ) : null}
                       </div>
-                      <div className="line-clamp-2 text-base font-semibold leading-6 text-white">{card.title}</div>
+                      <div className="break-words text-base font-semibold leading-6 text-white">
+                        {card.title}
+                      </div>
                     </div>
 
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/40">
@@ -767,11 +1064,19 @@ function ColumnLane({
                     </div>
                   </div>
 
-                  <div className="line-clamp-4 text-sm leading-6 text-white/60">{buildSnippet(card)}</div>
+                  <div className="break-words text-sm leading-6 text-white/60">
+                    {buildSnippet(card)}
+                  </div>
 
                   <div className="mt-4 flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
                     <span>{formatDate(card.updated_at)}</span>
-                    <span>{String(card.card_type || "").toLowerCase() === "fluxograma" ? `${parseFlowchart(card.structure_json, card.title, card.content_text).nodes.length} blocos` : "Texto"}</span>
+                    <span>
+                      {String(card.card_type || "").toLowerCase() === "fluxograma"
+                        ? `${parseFlowchart(card.structure_json, card.title, card.content_text).nodes.length} blocos`
+                        : String(card.card_type || "").toLowerCase() === "checklist"
+                          ? `${getChecklistStats(parseChecklistContent(card.content_text)).checked}/${getChecklistStats(parseChecklistContent(card.content_text)).total || 0} concluídos`
+                          : "Texto"}
+                    </span>
                   </div>
                 </button>
               );
@@ -787,20 +1092,27 @@ function ColumnLane({
   );
 }
 
+
 function FlowchartCanvas({
   flow,
   selectedNodeId,
   selectedEdgeId,
-  onNodeActivate,
+  pendingConnectionNodeId,
+  onSelectNode,
   onSelectEdge,
   onMoveNode,
+  onHandleClick,
+  viewportClassName,
 }: {
   flow: BobarFlowchart;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
-  onNodeActivate: (nodeId: string) => void;
+  pendingConnectionNodeId: string | null;
+  onSelectNode: (nodeId: string) => void;
   onSelectEdge: (edgeId: string) => void;
   onMoveNode: (nodeId: string, patch: Partial<BobarFlowNode>) => void;
+  onHandleClick: (nodeId: string, role: "source" | "target") => void;
+  viewportClassName?: string;
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gestureRef = React.useRef<{
@@ -811,10 +1123,55 @@ function FlowchartCanvas({
     originY: number;
     moved: boolean;
   } | null>(null);
+  const [connectionPointer, setConnectionPointer] = React.useState<{ x: number; y: number } | null>(
+    null,
+  );
 
   const width = Math.max(980, ...flow.nodes.map((node) => node.x + 360));
   const height = Math.max(560, ...flow.nodes.map((node) => node.y + 210));
-  const byId = React.useMemo(() => new Map(flow.nodes.map((node) => [node.id, node])), [flow.nodes]);
+  const byId = React.useMemo(
+    () => new Map(flow.nodes.map((node) => [node.id, node])),
+    [flow.nodes],
+  );
+  const outgoingCountByNode = React.useMemo(() => {
+    const next = new Map<string, number>();
+    for (const edge of flow.edges) {
+      next.set(edge.source, (next.get(edge.source) || 0) + 1);
+    }
+    return next;
+  }, [flow.edges]);
+  const incomingCountByNode = React.useMemo(() => {
+    const next = new Map<string, number>();
+    for (const edge of flow.edges) {
+      next.set(edge.target, (next.get(edge.target) || 0) + 1);
+    }
+    return next;
+  }, [flow.edges]);
+  const pendingSourceNode = pendingConnectionNodeId
+    ? byId.get(pendingConnectionNodeId) || null
+    : null;
+
+  const updateConnectionPointer = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const bounds = container.getBoundingClientRect();
+    setConnectionPointer({
+      x: event.clientX - bounds.left + container.scrollLeft,
+      y: event.clientY - bounds.top + container.scrollTop,
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!pendingSourceNode) {
+      setConnectionPointer(null);
+      return;
+    }
+
+    setConnectionPointer({
+      x: pendingSourceNode.x + 256,
+      y: pendingSourceNode.y + 62,
+    });
+  }, [pendingSourceNode]);
 
   React.useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -836,7 +1193,7 @@ function FlowchartCanvas({
       const gesture = gestureRef.current;
       if (!gesture) return;
       if (!gesture.moved) {
-        onNodeActivate(gesture.nodeId);
+        onSelectNode(gesture.nodeId);
       }
       gestureRef.current = null;
     };
@@ -847,25 +1204,50 @@ function FlowchartCanvas({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [height, onMoveNode, onNodeActivate, width]);
+  }, [height, onMoveNode, onSelectNode, width]);
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#040914]">
       <div className="border-b border-white/10 px-5 py-4">
-        <div className="flex flex-wrap items-center gap-3 text-sm text-white/60">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge className="rounded-full border border-violet-400/30 bg-violet-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-100">
-            Fluxograma interativo
+            Fluxograma
           </Badge>
-          <span>Clique em um bloco e depois em outro para conectar ou desconectar.</span>
-          <span>Arraste o bloco pelo próprio card para reposicionar.</span>
+          <Badge className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+            {flow.nodes.length} blocos
+          </Badge>
+          <Badge className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+            {flow.edges.length} conexões
+          </Badge>
+          {pendingSourceNode ? (
+            <Badge className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-100">
+              Nova conexão em andamento
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="mt-3 grid gap-2 text-sm text-white/60 lg:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
+            Clique na bolinha de saída para iniciar uma conexão.
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
+            Clique na bolinha já ocupada para soltar a conexão automaticamente.
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
+            Arraste pelo próprio bloco para reposicionar sem sair do canvas.
+          </div>
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className="relative h-[640px] overflow-auto bg-[radial-gradient(circle_at_top,rgba(6,182,212,0.08),transparent_35%),linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px]"
+        onPointerMove={pendingSourceNode ? updateConnectionPointer : undefined}
+        className={cn(
+          "relative overflow-auto bg-[radial-gradient(circle_at_top,rgba(6,182,212,0.08),transparent_35%),linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px]",
+          viewportClassName || "h-[min(76vh,820px)]",
+        )}
       >
-        <div className="relative" style={{ width, height }}>
+        <div className="relative min-h-full" style={{ width, height }}>
           <svg className="pointer-events-none absolute inset-0 h-full w-full">
             {flow.edges.map((edge) => {
               const source = byId.get(edge.source);
@@ -888,36 +1270,32 @@ function FlowchartCanvas({
                 />
               );
             })}
-          </svg>
 
-          {flow.edges.map((edge) => {
-            const source = byId.get(edge.source);
-            const target = byId.get(edge.target);
-            if (!source || !target) return null;
-            const centerX = (source.x + 256 + target.x) / 2;
-            const centerY = (source.y + 62 + target.y + 62) / 2;
-            const selected = edge.id === selectedEdgeId;
-            return (
-              <button
-                key={`${edge.id}-label`}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelectEdge(edge.id);
-                }}
-                className={cn(
-                  "absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-[0_10px_24px_rgba(0,0,0,0.28)] transition",
-                  selected ? "border-cyan-300/55 bg-cyan-400/15 text-cyan-100" : "border-white/10 bg-[#0b1426] text-white/55 hover:bg-white/10"
+            {pendingSourceNode && connectionPointer ? (
+              <path
+                d={buildConnectionPath(
+                  pendingSourceNode.x + 256,
+                  pendingSourceNode.y + 62,
+                  connectionPointer.x,
+                  connectionPointer.y,
                 )}
-                style={{ left: centerX, top: centerY }}
-              >
-                {edge.label || "Conexão"}
-              </button>
-            );
-          })}
+                fill="none"
+                stroke="rgba(34,211,238,0.85)"
+                strokeWidth={2}
+                strokeDasharray="10 8"
+                strokeLinecap="round"
+              />
+            ) : null}
+          </svg>
 
           {flow.nodes.map((node) => {
             const selected = node.id === selectedNodeId;
+            const isPendingSource = node.id === pendingConnectionNodeId;
+            const incomingCount = incomingCountByNode.get(node.id) || 0;
+            const outgoingCount = outgoingCountByNode.get(node.id) || 0;
+            const hasIncoming = incomingCount > 0;
+            const hasOutgoing = outgoingCount > 0;
+
             return (
               <div
                 key={node.id}
@@ -938,12 +1316,14 @@ function FlowchartCanvas({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    onNodeActivate(node.id);
+                    onSelectNode(node.id);
                   }
                 }}
                 className={cn(
-                  "absolute w-64 cursor-grab rounded-[1.8rem] border p-4 shadow-[0_20px_40px_rgba(0,0,0,0.28)] transition active:cursor-grabbing",
-                  selected ? "border-cyan-300/55 bg-[#10213d] ring-2 ring-cyan-300/25" : "border-white/10 bg-[#0b1426]/95 hover:border-white/20"
+                  "absolute w-64 cursor-grab overflow-hidden rounded-[1.8rem] border p-4 shadow-[0_20px_40px_rgba(0,0,0,0.28)] transition active:cursor-grabbing",
+                  selected
+                    ? "border-cyan-300/55 bg-[#10213d] ring-2 ring-cyan-300/25"
+                    : "border-white/10 bg-[#0b1426]/95 hover:border-white/20",
                 )}
                 style={{ left: node.x, top: node.y }}
               >
@@ -959,21 +1339,79 @@ function FlowchartCanvas({
                         </Badge>
                       ) : null}
                     </div>
-                    <div className="line-clamp-2 text-sm font-semibold leading-5 text-white">{node.title || "Bloco sem título"}</div>
+                    <div className="break-words text-sm font-semibold leading-5 text-white">
+                      {node.title || "Bloco sem título"}
+                    </div>
                   </div>
                   <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/45">
                     <GripVertical className="h-4 w-4" />
                   </div>
                 </div>
 
-                <div className="line-clamp-4 text-sm leading-6 text-white/60">{normalizeText(node.content) || "Sem conteúdo."}</div>
+                <div className="break-words text-sm leading-6 text-white/60">
+                  {normalizeText(node.content) || "Sem conteúdo."}
+                </div>
 
                 <div className="mt-4 flex items-center justify-between gap-3">
-                  <div className="h-3 w-3 rounded-full bg-cyan-300/80 shadow-[0_0_0_6px_rgba(34,211,238,0.12)]" />
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    {selected ? "Selecionado" : "Clique ou arraste"}
+                  <button
+                    type="button"
+                    title={
+                      hasIncoming
+                        ? "Soltar conexão de entrada"
+                        : pendingSourceNode && pendingSourceNode.id !== node.id
+                          ? "Concluir conexão aqui"
+                          : "Usar como destino da conexão"
+                    }
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onHandleClick(node.id, "target");
+                    }}
+                    className={cn(
+                      "h-4 w-4 rounded-full transition hover:scale-110",
+                      hasIncoming
+                        ? "bg-amber-300 shadow-[0_0_0_6px_rgba(251,191,36,0.16)] hover:bg-amber-200"
+                        : "bg-cyan-300/80 shadow-[0_0_0_6px_rgba(34,211,238,0.12)] hover:bg-cyan-200",
+                    )}
+                  >
+                    <span className="sr-only">Entrada</span>
+                  </button>
+
+                  <div className="text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    {isPendingSource
+                      ? "Escolha o destino"
+                      : hasIncoming || hasOutgoing
+                        ? `${hasIncoming ? `${incomingCount} entrada` : ""}${hasIncoming && hasOutgoing ? " · " : ""}${hasOutgoing ? `${outgoingCount} saída` : ""}`
+                        : selected
+                          ? "Selecionado"
+                          : "Clique ou arraste"}
                   </div>
-                  <div className="h-3 w-3 rounded-full bg-violet-300/80 shadow-[0_0_0_6px_rgba(167,139,250,0.12)]" />
+
+                  <button
+                    type="button"
+                    title={
+                      hasOutgoing
+                        ? "Soltar conexão de saída"
+                        : isPendingSource
+                          ? "Cancelar nova conexão"
+                          : "Iniciar nova conexão"
+                    }
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onHandleClick(node.id, "source");
+                    }}
+                    className={cn(
+                      "h-4 w-4 rounded-full transition hover:scale-110",
+                      hasOutgoing
+                        ? "bg-amber-300 shadow-[0_0_0_6px_rgba(251,191,36,0.16)] hover:bg-amber-200"
+                        : isPendingSource
+                          ? "bg-cyan-300 shadow-[0_0_0_6px_rgba(34,211,238,0.18)]"
+                          : "bg-violet-300/80 shadow-[0_0_0_6px_rgba(167,139,250,0.12)] hover:bg-violet-200",
+                    )}
+                  >
+                    <span className="sr-only">Saída</span>
+                  </button>
                 </div>
               </div>
             );
@@ -984,26 +1422,349 @@ function FlowchartCanvas({
   );
 }
 
+function ChecklistEditor({
+  items,
+  summary,
+  onToggleItem,
+  onChangeItemText,
+  onAddItem,
+  onRemoveItem,
+  onClearCompleted,
+}: {
+  items: ChecklistItem[];
+  summary: { total: number; checked: number; pending: number };
+  onToggleItem: (itemId: string) => void;
+  onChangeItemText: (itemId: string, value: string) => void;
+  onAddItem: () => void;
+  onRemoveItem: (itemId: string) => void;
+  onClearCompleted: () => void;
+}) {
+  const progress = summary.total ? Math.round((summary.checked / summary.total) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+        Checklist do card
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-4 py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+            Itens
+          </div>
+          <div className="mt-2 text-2xl font-black text-white">{summary.total}</div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-emerald-400/15 bg-emerald-400/10 px-4 py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-100/70">
+            Concluídos
+          </div>
+          <div className="mt-2 text-2xl font-black text-white">{summary.checked}</div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-amber-400/15 bg-amber-400/10 px-4 py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100/70">
+            Pendentes
+          </div>
+          <div className="mt-2 text-2xl font-black text-white">{summary.pending}</div>
+        </div>
+      </div>
+
+      <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-white">Progresso do checklist</div>
+            <div className="text-sm text-white/55">
+              Marque os itens concluídos e mantenha o card operacional de verdade.
+            </div>
+          </div>
+          <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-sm font-semibold text-cyan-100">
+            {progress}%
+          </div>
+        </div>
+
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-cyan-300/80 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div
+            key={item.id}
+            className={cn(
+              "flex items-center gap-3 rounded-[1.5rem] border p-3 transition",
+              item.checked
+                ? "border-emerald-400/20 bg-emerald-400/10"
+                : "border-white/10 bg-white/[0.035]",
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => onToggleItem(item.id)}
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition",
+                item.checked
+                  ? "border-emerald-300/40 bg-emerald-300/20 text-emerald-100"
+                  : "border-white/10 bg-[#0a1225] text-white/45 hover:border-cyan-300/40 hover:text-cyan-100",
+              )}
+              aria-label={item.checked ? "Desmarcar item" : "Marcar item"}
+            >
+              <Check className="h-5 w-5" />
+            </button>
+
+            <Input
+              value={item.text}
+              onChange={(event) => onChangeItemText(item.id, event.target.value)}
+              placeholder={`Item ${index + 1}`}
+              className={cn(
+                "h-12 border-white/10 bg-[#0a1225]",
+                item.checked && "text-white/60 line-through",
+              )}
+            />
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-11 w-11 shrink-0 rounded-2xl"
+              onClick={() => onRemoveItem(item.id)}
+              aria-label={`Remover item ${index + 1}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" className="h-11 rounded-2xl" onClick={onAddItem}>
+          <Plus className="h-4 w-4" />
+          Adicionar item
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 rounded-2xl"
+          onClick={onClearCompleted}
+          disabled={!summary.checked}
+        >
+          <Trash2 className="h-4 w-4" />
+          Limpar concluídos
+        </Button>
+      </div>
+
+      <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
+        Cada linha agora é um item real com check individual. O texto livre continua nas
+        observações do card, não dentro do checklist.
+      </div>
+    </div>
+  );
+}
+
+
+
+function FlowEditorInspector({
+  selectedNode,
+  selectedEdge,
+  selectedEdgeNodes,
+  pendingConnectionNode,
+  onPatchNode,
+  onDeleteSelectedEdge,
+  className,
+  contentClassName,
+}: {
+  selectedNode: BobarFlowNode | null;
+  selectedEdge: BobarFlowEdge | null;
+  selectedEdgeNodes: { source: BobarFlowNode; target: BobarFlowNode } | null;
+  pendingConnectionNode: BobarFlowNode | null;
+  onPatchNode: (nodeId: string, patch: Partial<BobarFlowNode>) => void;
+  onDeleteSelectedEdge: () => void;
+  className?: string;
+  contentClassName?: string;
+}) {
+  return (
+    <Card
+      variant="glass"
+      className={cn("rounded-[2rem] border-white/10 bg-[#06101f]", className)}
+    >
+      <CardHeader>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+          Inspector
+        </div>
+        <CardTitle className="text-2xl font-black text-white">
+          {selectedNode
+            ? "Editar bloco"
+            : selectedEdge
+              ? "Conexão selecionada"
+              : pendingConnectionNode
+                ? "Finalizar conexão"
+                : "Selecione um item"}
+        </CardTitle>
+        <CardDescription className="text-white/55">
+          O fluxo abre em tela cheia para o canvas ter espaço real sem competir com o resto da
+          página.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className={cn("space-y-4", contentClassName)}>
+        {pendingConnectionNode ? (
+          <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
+            Nova conexão iniciada em <strong>{pendingConnectionNode.title}</strong>. Clique na
+            bolinha de entrada do destino para concluir. Se a bolinha já estiver ocupada, o clique
+            solta a conexão atual primeiro.
+          </div>
+        ) : null}
+
+        {selectedNode ? (
+          <>
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Título do bloco
+              </div>
+              <Input
+                value={selectedNode.title}
+                onChange={(event) => onPatchNode(selectedNode.id, { title: event.target.value })}
+                className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Tempo
+                </div>
+                <Input
+                  value={selectedNode.time || ""}
+                  onChange={(event) => onPatchNode(selectedNode.id, { time: event.target.value })}
+                  placeholder="0-3s"
+                  className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
+                />
+              </div>
+
+              <SelectField
+                label="Tipo do bloco"
+                value={selectedNode.kind || "step"}
+                options={[
+                  { value: "step", label: "Passo" },
+                  { value: "hook", label: "Hook" },
+                  { value: "support", label: "Prova" },
+                  { value: "cta", label: "CTA" },
+                  { value: "timeline", label: "Linha do tempo" },
+                ]}
+                onChange={(value) => onPatchNode(selectedNode.id, { kind: value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Conteúdo do bloco
+              </div>
+              <Textarea
+                value={selectedNode.content}
+                onChange={(event) => onPatchNode(selectedNode.id, { content: event.target.value })}
+                placeholder="Texto, fala, ação ou instrução desse bloco."
+                className="min-h-[220px] rounded-[1.6rem] border-cyan-400/15 bg-[#0a1225]"
+              />
+            </div>
+
+            <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
+              Para conectar, clique na bolinha de saída do bloco e depois na bolinha de entrada do
+              destino.
+            </div>
+          </>
+        ) : selectedEdge && selectedEdgeNodes ? (
+          <>
+            <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-4 py-4 text-sm leading-6 text-white/70">
+              Conexão entre <strong>{selectedEdgeNodes.source.title}</strong> e{" "}
+              <strong>{selectedEdgeNodes.target.title}</strong>.
+            </div>
+
+            <Button className="h-11 rounded-2xl" variant="outline" onClick={onDeleteSelectedEdge}>
+              <Unlink className="h-4 w-4" />
+              Remover conexão selecionada
+            </Button>
+          </>
+        ) : (
+          <EmptyState
+            title="Nada selecionado"
+            description="Clique em um bloco para editar. Para conectar, use as bolinhas do próprio bloco."
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+
 export default function BobarPage() {
   const [board, setBoard] = React.useState<BobarBoard | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
+  const [activeView, setActiveView] = React.useState<BobarViewMode>("quadro");
   const [selectedCardId, setSelectedCardId] = React.useState<number | null>(null);
+  const [selectedImportedCardId, setSelectedImportedCardId] = React.useState<number | null>(null);
   const [cardDraft, setCardDraft] = React.useState<CardEditorDraft | null>(null);
   const [baselineDraft, setBaselineDraft] = React.useState<CardEditorDraft | null>(null);
+  const [checklistDraft, setChecklistDraft] = React.useState<ChecklistItem[]>([]);
+  const [baselineChecklist, setBaselineChecklist] = React.useState<ChecklistItem[]>([]);
   const [flowDraft, setFlowDraft] = React.useState<BobarFlowchart | null>(null);
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = React.useState<string | null>(null);
-  const [newColumnName, setNewColumnName] = React.useState("");
+  const [pendingConnectionNodeId, setPendingConnectionNodeId] = React.useState<string | null>(null);
+  const [isFlowEditorOpen, setIsFlowEditorOpen] = React.useState(false);
   const [templateKey, setTemplateKey] = React.useState("");
   const [dragState, setDragState] = React.useState<DragCardState | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = React.useState<number | null>(null);
+  const [columnDialog, setColumnDialog] = React.useState<ColumnDialogState | null>(null);
+  const [columnNameDraft, setColumnNameDraft] = React.useState("");
+  const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
 
-  const selectedCard = React.useMemo(() => findCard(board, selectedCardId), [board, selectedCardId]);
-  const cards = React.useMemo(() => board?.columns.flatMap((column) => column.cards) || [], [board]);
-
-  const selectedCardType = String(cardDraft?.card_type || selectedCard?.card_type || "").toLowerCase();
+  const manualBoard = React.useMemo(
+    () => filterBoardCards(board, (card) => !isAuthorityImportCard(card)),
+    [board],
+  );
+  const importedCards = React.useMemo(
+    () =>
+      board?.columns
+        .flatMap((column) => column.cards)
+        .filter((card) => isAuthorityImportCard(card))
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()) || [],
+    [board],
+  );
+  const selectedCard = React.useMemo(
+    () => findCard(manualBoard, selectedCardId),
+    [manualBoard, selectedCardId],
+  );
+  const cards = React.useMemo(
+    () => manualBoard?.columns.flatMap((column) => column.cards) || [],
+    [manualBoard],
+  );
+  const selectedCardType = String(
+    cardDraft?.card_type || selectedCard?.card_type || "",
+  ).toLowerCase();
+  const isChecklistCard = selectedCardType === "checklist";
   const isFlowCard = selectedCardType === "fluxograma";
+  const boardHasColumns = Boolean(manualBoard?.columns.length);
+  const selectedColumn = React.useMemo(
+    () =>
+      manualBoard?.columns.find(
+        (column) => column.id === Number(cardDraft?.column_id ?? selectedCard?.column_id ?? 0),
+      ) || null,
+    [manualBoard, cardDraft?.column_id, selectedCard?.column_id],
+  );
+  const recentCards = React.useMemo(
+    () =>
+      [...cards]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 6),
+    [cards],
+  );
+
   const templateOptions = React.useMemo<DropdownOption[]>(
     () =>
       CARD_TEMPLATES.map((template) => ({
@@ -1011,49 +1772,107 @@ export default function BobarPage() {
         label: template.label,
         description: template.description,
       })),
-    []
+    [],
   );
+
   const cardTypeOptions = React.useMemo<DropdownOption[]>(
     () =>
       CARD_TYPE_OPTIONS.map((option) => ({
         value: option.value,
         label: option.label,
       })),
-    []
+    [],
   );
+
   const columnOptions = React.useMemo<DropdownOption[]>(
     () =>
-      (board?.columns || []).map((column) => ({
+      (manualBoard?.columns || []).map((column) => ({
         value: String(column.id),
         label: column.name,
       })),
-    [board]
+    [manualBoard],
   );
 
   const selectedNode = React.useMemo(
     () => (flowDraft?.nodes || []).find((node) => node.id === selectedNodeId) || null,
-    [flowDraft, selectedNodeId]
+    [flowDraft, selectedNodeId],
   );
+
   const selectedEdge = React.useMemo(
     () => (flowDraft?.edges || []).find((edge) => edge.id === selectedEdgeId) || null,
-    [flowDraft, selectedEdgeId]
+    [flowDraft, selectedEdgeId],
+  );
+
+  const activeFlow = React.useMemo(
+    () =>
+      selectedCard
+        ? flowDraft ||
+          parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text)
+        : null,
+    [flowDraft, selectedCard],
+  );
+
+  const selectedEdgeNodes = React.useMemo(() => {
+    if (!selectedEdge || !activeFlow) return null;
+    const source = activeFlow.nodes.find((node) => node.id === selectedEdge.source) || null;
+    const target = activeFlow.nodes.find((node) => node.id === selectedEdge.target) || null;
+    if (!source || !target) return null;
+    return { source, target };
+  }, [activeFlow, selectedEdge]);
+
+  const pendingConnectionNode = React.useMemo(
+    () => (activeFlow?.nodes || []).find((node) => node.id === pendingConnectionNodeId) || null,
+    [activeFlow, pendingConnectionNodeId],
+  );
+
+  const checklistSummary = React.useMemo(
+    () => getChecklistStats(checklistDraft),
+    [checklistDraft],
   );
 
   const hasPendingChanges = React.useMemo(() => {
     if (!selectedCard || !cardDraft || !baselineDraft) return false;
     if (!shallowEqualDraft(cardDraft, baselineDraft)) return true;
+    if (isChecklistCard) {
+      return serializeChecklistContent(checklistDraft) !== serializeChecklistContent(baselineChecklist);
+    }
     if (isFlowCard) {
-      const current = JSON.stringify(flowDraft || parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text));
-      const persisted = JSON.stringify(parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text));
+      const current = JSON.stringify(
+        flowDraft ||
+          parseFlowchart(
+            selectedCard.structure_json,
+            selectedCard.title,
+            selectedCard.content_text,
+          ),
+      );
+      const persisted = JSON.stringify(
+        parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text),
+      );
       return current !== persisted;
     }
     return false;
-  }, [baselineDraft, cardDraft, flowDraft, isFlowCard, selectedCard]);
+  }, [
+    baselineChecklist,
+    baselineDraft,
+    cardDraft,
+    checklistDraft,
+    flowDraft,
+    isChecklistCard,
+    isFlowCard,
+    selectedCard,
+  ]);
 
-  const syncSelection = React.useCallback((nextBoard: BobarBoard | null, preferredCardId?: number | null) => {
-    const nextId = preferredCardId && findCard(nextBoard, preferredCardId) ? preferredCardId : firstCardId(nextBoard);
-    setSelectedCardId(nextId);
-  }, []);
+  const syncSelection = React.useCallback(
+    (nextBoard: BobarBoard | null, preferredCardId?: number | null) => {
+      const nextManualBoard = filterBoardCards(nextBoard, (card) => !isAuthorityImportCard(card));
+      const nextId =
+        preferredCardId && findCard(nextManualBoard, preferredCardId)
+          ? preferredCardId
+          : firstCardId(nextManualBoard);
+      setSelectedCardId(nextId);
+    },
+    [],
+  );
 
   const loadBoard = React.useCallback(
     async (preferredCardId?: number | null) => {
@@ -1068,7 +1887,7 @@ export default function BobarPage() {
         setLoading(false);
       }
     },
-    [syncSelection]
+    [syncSelection],
   );
 
   React.useEffect(() => {
@@ -1076,13 +1895,28 @@ export default function BobarPage() {
   }, [loadBoard]);
 
   React.useEffect(() => {
+    if (!importedCards.length) {
+      setSelectedImportedCardId(null);
+      return;
+    }
+
+    setSelectedImportedCardId((current) =>
+      current && importedCards.some((card) => card.id === current) ? current : importedCards[0]?.id || null,
+    );
+  }, [importedCards]);
+
+
+  React.useEffect(() => {
     if (!selectedCard) {
       setCardDraft(null);
       setBaselineDraft(null);
+      setChecklistDraft([]);
+      setBaselineChecklist([]);
       setFlowDraft(null);
       setTemplateKey("");
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
+      setPendingConnectionNodeId(null);
       return;
     }
 
@@ -1094,63 +1928,105 @@ export default function BobarPage() {
       note: selectedCard.note || "",
     };
 
+    const nextChecklist = parseChecklistContent(selectedCard.content_text || "");
+
     setCardDraft(draft);
     setBaselineDraft(draft);
-    const nextFlow = parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text);
+    setChecklistDraft(nextChecklist);
+    setBaselineChecklist(nextChecklist);
+    const nextFlow = parseFlowchart(
+      selectedCard.structure_json,
+      selectedCard.title,
+      selectedCard.content_text,
+    );
     setFlowDraft(nextFlow);
     setTemplateKey(readTemplateKeyFromStructure(selectedCard.structure_json));
     setSelectedNodeId(nextFlow.nodes[0]?.id || null);
     setSelectedEdgeId(null);
+    setPendingConnectionNodeId(null);
   }, [selectedCard]);
 
   const runBoardMutation = React.useCallback(
-    async (task: () => Promise<BobarBoard>, successMessage?: string, preferredCardId?: number | null) => {
+    async (
+      task: () => Promise<BobarBoard>,
+      successMessage?: string,
+      preferredCardId?: number | null,
+    ) => {
       try {
         setBusy(true);
         const nextBoard = await task();
         setBoard(nextBoard);
         syncSelection(nextBoard, preferredCardId ?? selectedCardId);
         if (successMessage) toastSuccess(successMessage);
+        return nextBoard;
       } catch (error) {
         toastApiError(error);
+        return null;
       } finally {
         setBusy(false);
       }
     },
-    [selectedCardId, syncSelection]
+    [selectedCardId, syncSelection],
   );
 
-  const handleCreateColumn = React.useCallback(async () => {
-    const name = newColumnName.trim();
-    if (!name) return;
-    await runBoardMutation(() => bobarService.createColumn({ name }), "Coluna criada.");
-    setNewColumnName("");
-  }, [newColumnName, runBoardMutation]);
+  const openCreateColumnDialog = React.useCallback(() => {
+    setColumnNameDraft("");
+    setColumnDialog({ mode: "create", column: null });
+  }, []);
 
-  const handleRenameColumn = React.useCallback(
-    async (column: BobarColumn) => {
-      const name = window.prompt("Novo nome da coluna:", column.name)?.trim();
-      if (!name || name === column.name) return;
-      await runBoardMutation(() => bobarService.renameColumn(column.id, { name }), "Coluna atualizada.");
-    },
-    [runBoardMutation]
-  );
+  const handleRenameColumn = React.useCallback((column: BobarColumn) => {
+    setColumnNameDraft(column.name);
+    setColumnDialog({ mode: "rename", column });
+  }, []);
 
-  const handleDeleteColumn = React.useCallback(
-    async (column: BobarColumn) => {
-      const confirmed = window.confirm(
-        `Excluir a coluna "${column.name}"?\n\nOs cards serão movidos automaticamente para outra coluna.`
+  const handleSubmitColumnDialog = React.useCallback(
+    async (event?: React.FormEvent) => {
+      event?.preventDefault();
+      const name = columnNameDraft.trim();
+      if (!name || !columnDialog) return;
+
+      if (columnDialog.mode === "create") {
+        const nextBoard = await runBoardMutation(
+          () => bobarService.createColumn({ name }),
+          "Coluna criada.",
+        );
+        if (nextBoard) {
+          setColumnDialog(null);
+          setColumnNameDraft("");
+        }
+        return;
+      }
+
+      if (name === columnDialog.column.name) {
+        setColumnDialog(null);
+        return;
+      }
+
+      const nextBoard = await runBoardMutation(
+        () => bobarService.renameColumn(columnDialog.column.id, { name }),
+        "Coluna atualizada.",
       );
-      if (!confirmed) return;
-      await runBoardMutation(() => bobarService.deleteColumn(column.id), "Coluna removida.");
+
+      if (nextBoard) {
+        setColumnDialog(null);
+        setColumnNameDraft("");
+      }
     },
-    [runBoardMutation]
+    [columnDialog, columnNameDraft, runBoardMutation],
   );
+
+  const handleDeleteColumn = React.useCallback((column: BobarColumn) => {
+    setDeleteDialog({ type: "column", column });
+  }, []);
 
   const handleCreateCard = React.useCallback(
     async (columnId?: number) => {
-      const fallbackColumnId = columnId || board?.columns[0]?.id;
-      if (!fallbackColumnId) return;
+      const fallbackColumnId = columnId || manualBoard?.columns[0]?.id;
+      if (!fallbackColumnId) {
+        toastInfo("Crie uma coluna antes de adicionar cards.");
+        return;
+      }
+
       await runBoardMutation(
         () =>
           bobarService.createCard({
@@ -1160,17 +2036,20 @@ export default function BobarPage() {
             content_text: "",
             card_type: "manual",
           }),
-        "Card criado."
+        "Card criado.",
       );
     },
-    [board, runBoardMutation]
+    [manualBoard, runBoardMutation],
   );
 
-  const handleStartDragCard = React.useCallback((card: BobarCard, event: React.DragEvent<HTMLButtonElement>) => {
-    setDragState({ cardId: card.id, fromColumnId: card.column_id });
-    setDragOverColumnId(card.column_id);
-    event.dataTransfer.effectAllowed = "move";
-  }, []);
+  const handleStartDragCard = React.useCallback(
+    (card: BobarCard, event: React.DragEvent<HTMLButtonElement>) => {
+      setDragState({ cardId: card.id, fromColumnId: card.column_id });
+      setDragOverColumnId(card.column_id);
+      event.dataTransfer.effectAllowed = "move";
+    },
+    [],
+  );
 
   const handleEndDragCard = React.useCallback(() => {
     setDragState(null);
@@ -1183,8 +2062,15 @@ export default function BobarPage() {
       setDragState(null);
       setDragOverColumnId(null);
       if (!drag) return;
+
       const targetColumn = board?.columns.find((column) => column.id === columnId);
-      if (!targetColumn || (drag.fromColumnId === columnId && targetColumn.cards.some((card) => card.id === drag.cardId))) return;
+      if (
+        !targetColumn ||
+        (drag.fromColumnId === columnId &&
+          targetColumn.cards.some((card) => card.id === drag.cardId))
+      )
+        return;
+
       await runBoardMutation(
         () =>
           bobarService.moveCard(drag.cardId, {
@@ -1192,10 +2078,10 @@ export default function BobarPage() {
             position: targetColumn.cards.length,
           }),
         "Card movido.",
-        drag.cardId
+        drag.cardId,
       );
     },
-    [board, dragState, runBoardMutation]
+    [board, dragState, runBoardMutation],
   );
 
   const handleSaveCard = React.useCallback(async () => {
@@ -1207,12 +2093,16 @@ export default function BobarPage() {
         : parseFlowchart(selectedCard.structure_json, cardDraft.title, cardDraft.content_text)
       : null;
 
+    const checklistContent = isChecklistCard
+      ? serializeChecklistContent(checklistDraft)
+      : cardDraft.content_text;
+
     const payload = {
       title: cardDraft.title.trim() || "Card sem título",
       card_type: String(cardDraft.card_type || "manual"),
       column_id: Number(cardDraft.column_id),
       note: cardDraft.note,
-      content_text: normalizedFlow ? flowToContentText(normalizedFlow) : cardDraft.content_text,
+      content_text: normalizedFlow ? flowToContentText(normalizedFlow) : checklistContent,
       structure_json: normalizedFlow
         ? JSON.stringify({
             ...normalizedFlow,
@@ -1221,22 +2111,62 @@ export default function BobarPage() {
         : "",
     };
 
-    await runBoardMutation(() => bobarService.updateCard(selectedCard.id, payload), "Card salvo.", selectedCard.id);
-  }, [cardDraft, flowDraft, isFlowCard, runBoardMutation, selectedCard, templateKey]);
+    await runBoardMutation(
+      () => bobarService.updateCard(selectedCard.id, payload),
+      "Card salvo.",
+      selectedCard.id,
+    );
+  }, [
+    cardDraft,
+    checklistDraft,
+    flowDraft,
+    isChecklistCard,
+    isFlowCard,
+    runBoardMutation,
+    selectedCard,
+    templateKey,
+  ]);
 
-  const handleDeleteCard = React.useCallback(async () => {
+  const openDeleteSelectedCardDialog = React.useCallback(() => {
     if (!selectedCard) return;
-    const confirmed = window.confirm(`Excluir o card "${selectedCard.title}"?`);
-    if (!confirmed) return;
-    const deletingId = selectedCard.id;
-    await runBoardMutation(() => bobarService.deleteCard(deletingId), "Card removido.");
-  }, [runBoardMutation, selectedCard]);
+    setDeleteDialog({ type: "card", card: selectedCard });
+  }, [selectedCard]);
 
-  const handleApplyTemplate = React.useCallback(() => {
-    if (!cardDraft || !templateKey) return;
-    const template = CARD_TEMPLATES.find((item) => item.key === templateKey);
+  const handleConfirmDelete = React.useCallback(async () => {
+    if (!deleteDialog) return;
+
+    if (deleteDialog.type === "column") {
+      const nextBoard = await runBoardMutation(
+        () => bobarService.deleteColumn(deleteDialog.column.id),
+        "Coluna removida.",
+      );
+      if (nextBoard) setDeleteDialog(null);
+      return;
+    }
+
+    const deletingId = deleteDialog.card.id;
+    const nextBoard = await runBoardMutation(
+      () => bobarService.deleteCard(deletingId),
+      "Card removido.",
+    );
+    if (nextBoard) setDeleteDialog(null);
+  }, [deleteDialog, runBoardMutation]);
+
+  const applyTemplateByKey = React.useCallback((nextTemplateKey: string) => {
+    if (!nextTemplateKey) {
+      setTemplateKey("");
+      return;
+    }
+
+    const template = CARD_TEMPLATES.find((item) => item.key === nextTemplateKey);
     if (!template) return;
 
+    const nextChecklist =
+      template.cardType === "checklist"
+        ? parseChecklistContent(template.contentText)
+        : normalizeChecklistItems([createChecklistItem()]);
+
+    setTemplateKey(nextTemplateKey);
     setCardDraft((current) =>
       current
         ? {
@@ -1244,10 +2174,14 @@ export default function BobarPage() {
             title: template.title,
             note: template.note,
             card_type: template.cardType,
-            content_text: template.contentText,
+            content_text:
+              template.cardType === "checklist"
+                ? serializeChecklistContent(nextChecklist)
+                : template.contentText,
           }
-        : current
+        : current,
     );
+    setChecklistDraft(nextChecklist);
 
     if (template.structure) {
       const cloned = cloneFlow(template.structure);
@@ -1257,50 +2191,216 @@ export default function BobarPage() {
       });
       setSelectedNodeId(cloned.nodes[0]?.id || null);
       setSelectedEdgeId(null);
+      setPendingConnectionNodeId(null);
     } else {
       setFlowDraft(null);
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
+      setPendingConnectionNodeId(null);
     }
 
-    toastSuccess("Template aplicado no card.");
-  }, [cardDraft, templateKey]);
+    toastSuccess("Template aplicado automaticamente.");
+  }, []);
+
+  const handleCardTypeChange = React.useCallback(
+    (value: string) => {
+      setCardDraft((current) => {
+        if (!current) return current;
+
+        if (value === "checklist") {
+          const nextChecklist = parseChecklistContent(current.content_text || selectedCard?.content_text);
+          setChecklistDraft(nextChecklist);
+          return {
+            ...current,
+            card_type: value,
+            content_text: serializeChecklistContent(nextChecklist),
+          };
+        }
+
+        if (value === "fluxograma") {
+          setFlowDraft((currentFlow) => {
+            if (currentFlow?.nodes.length) {
+              setSelectedNodeId(currentFlow.nodes[0]?.id || null);
+              setSelectedEdgeId(null);
+              setPendingConnectionNodeId(null);
+              return currentFlow;
+            }
+
+            const nextFlow = parseFlowchart(
+              "",
+              current.title || selectedCard?.title || "",
+              current.content_text || selectedCard?.content_text || "",
+            );
+            setSelectedNodeId(nextFlow.nodes[0]?.id || null);
+            setSelectedEdgeId(null);
+            setPendingConnectionNodeId(null);
+            return nextFlow;
+          });
+        }
+
+        return {
+          ...current,
+          card_type: value,
+        };
+      });
+    },
+    [selectedCard],
+  );
+
+  const updateChecklistDraft = React.useCallback(
+    (updater: ChecklistItem[] | ((current: ChecklistItem[]) => ChecklistItem[])) => {
+      setChecklistDraft((current) => {
+        const nextRaw =
+          typeof updater === "function"
+            ? (updater as (current: ChecklistItem[]) => ChecklistItem[])(current)
+            : updater;
+        const nextItems = normalizeChecklistItems(nextRaw);
+        setCardDraft((draft) =>
+          draft
+            ? {
+                ...draft,
+                content_text: serializeChecklistContent(nextItems),
+              }
+            : draft,
+        );
+        return nextItems;
+      });
+    },
+    [],
+  );
+
+  const handleChecklistItemToggle = React.useCallback(
+    (itemId: string) => {
+      updateChecklistDraft((current) =>
+        current.map((item) =>
+          item.id === itemId ? { ...item, checked: !item.checked } : item,
+        ),
+      );
+    },
+    [updateChecklistDraft],
+  );
+
+  const handleChecklistItemTextChange = React.useCallback(
+    (itemId: string, value: string) => {
+      updateChecklistDraft((current) =>
+        current.map((item) => (item.id === itemId ? { ...item, text: value } : item)),
+      );
+    },
+    [updateChecklistDraft],
+  );
+
+  const handleAddChecklistItem = React.useCallback(() => {
+    updateChecklistDraft((current) => [...current, createChecklistItem()]);
+  }, [updateChecklistDraft]);
+
+  const handleRemoveChecklistItem = React.useCallback(
+    (itemId: string) => {
+      updateChecklistDraft((current) => current.filter((item) => item.id !== itemId));
+    },
+    [updateChecklistDraft],
+  );
+
+  const handleClearCompletedChecklistItems = React.useCallback(() => {
+    updateChecklistDraft((current) => current.filter((item) => !item.checked));
+  }, [updateChecklistDraft]);
 
   const setNodePatch = React.useCallback((nodeId: string, patch: Partial<BobarFlowNode>) => {
     setFlowDraft((current) => {
       const source = current || { nodes: [], edges: [], meta: { grid: 32 } };
       return {
         ...source,
-        nodes: source.nodes.map((node, index) => (node.id === nodeId ? normalizeFlowNode({ ...node, ...patch }, index) : node)),
+        nodes: source.nodes.map((node, index) =>
+          node.id === nodeId ? normalizeFlowNode({ ...node, ...patch }, index) : node,
+        ),
       };
     });
   }, []);
 
-  const handleNodeActivate = React.useCallback(
-    (nodeId: string) => {
+  const handleSelectNode = React.useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+  }, []);
+
+
+  const handleConnectionHandleClick = React.useCallback(
+    (nodeId: string, role: "source" | "target") => {
+      const base =
+        flowDraft ||
+        parseFlowchart(
+          selectedCard?.structure_json,
+          cardDraft?.title || selectedCard?.title || "Novo fluxo",
+          cardDraft?.content_text || selectedCard?.content_text || "",
+        );
+
+      setSelectedNodeId(nodeId);
       setSelectedEdgeId(null);
-      setFlowDraft((current) => {
-        if (!current) return current;
-        if (selectedNodeId && selectedNodeId !== nodeId) {
-          const existing = current.edges.find((edge) => edge.source === selectedNodeId && edge.target === nodeId);
-          const nextEdges = existing
-            ? current.edges.filter((edge) => edge.id !== existing.id)
-            : dedupeEdges([...current.edges, { id: newEdgeId(), source: selectedNodeId, target: nodeId, label: "" }]);
-          setSelectedEdgeId(existing ? null : nextEdges[nextEdges.length - 1]?.id || null);
-          setSelectedNodeId(nodeId);
-          return { ...current, edges: nextEdges };
+
+      if (role === "source") {
+        const hasOutgoing = base.edges.some((edge) => edge.source === nodeId);
+        if (hasOutgoing) {
+          setFlowDraft({
+            ...base,
+            edges: base.edges.filter((edge) => edge.source !== nodeId),
+          });
+          setPendingConnectionNodeId(nodeId);
+          return;
         }
-        setSelectedNodeId(nodeId);
-        return current;
+
+        setPendingConnectionNodeId((current) => (current === nodeId ? null : nodeId));
+        if (!flowDraft) {
+          setFlowDraft(base);
+        }
+        return;
+      }
+
+      const hasIncoming = base.edges.some((edge) => edge.target === nodeId);
+      if (hasIncoming) {
+        setFlowDraft({
+          ...base,
+          edges: base.edges.filter((edge) => edge.target !== nodeId),
+        });
+        return;
+      }
+
+      if (!pendingConnectionNodeId || pendingConnectionNodeId === nodeId) {
+        setPendingConnectionNodeId(null);
+        if (!flowDraft) {
+          setFlowDraft(base);
+        }
+        return;
+      }
+
+      const createdEdge = {
+        id: newEdgeId(),
+        source: pendingConnectionNodeId,
+        target: nodeId,
+        label: "",
+      };
+
+      setFlowDraft({
+        ...base,
+        edges: dedupeEdges([
+          ...base.edges.filter(
+            (edge) => edge.source !== pendingConnectionNodeId && edge.target !== nodeId,
+          ),
+          createdEdge,
+        ]),
       });
+      setSelectedEdgeId(createdEdge.id);
+      setPendingConnectionNodeId(null);
     },
-    [selectedNodeId]
+    [cardDraft?.content_text, cardDraft?.title, flowDraft, pendingConnectionNodeId, selectedCard],
   );
 
   const handleAddNode = React.useCallback(() => {
     setFlowDraft((current) => {
-      const base = current || parseFlowchart("", cardDraft?.title || "Novo fluxo", cardDraft?.content_text || "");
-      const anchor = base.nodes.find((node) => node.id === selectedNodeId) || base.nodes[base.nodes.length - 1] || null;
+      const base =
+        current ||
+        parseFlowchart("", cardDraft?.title || "Novo fluxo", cardDraft?.content_text || "");
+      const anchor =
+        base.nodes.find((node) => node.id === selectedNodeId) ||
+        base.nodes[base.nodes.length - 1] ||
+        null;
       const node = normalizeFlowNode(
         {
           id: newNodeId(),
@@ -1310,17 +2410,14 @@ export default function BobarPage() {
           x: anchor ? anchor.x + 300 : 80,
           y: anchor ? anchor.y : 80,
         },
-        base.nodes.length
+        base.nodes.length,
       );
-      const nextEdges = anchor
-        ? dedupeEdges([...base.edges, { id: newEdgeId(), source: anchor.id, target: node.id, label: "" }])
-        : base.edges;
       return {
         ...base,
         nodes: [...base.nodes, node],
-        edges: nextEdges,
       };
     });
+    setPendingConnectionNodeId(null);
   }, [cardDraft?.content_text, cardDraft?.title, selectedNodeId]);
 
   const handleDeleteSelectedNode = React.useCallback(() => {
@@ -1328,7 +2425,9 @@ export default function BobarPage() {
     setFlowDraft((current) => {
       if (!current) return current;
       const nextNodes = current.nodes.filter((node) => node.id !== selectedNodeId);
-      const nextEdges = current.edges.filter((edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId);
+      const nextEdges = current.edges.filter(
+        (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,
+      );
       const nextFlow = {
         ...current,
         nodes: nextNodes,
@@ -1338,7 +2437,10 @@ export default function BobarPage() {
       setSelectedEdgeId(null);
       return nextFlow;
     });
-  }, [selectedNodeId]);
+    if (pendingConnectionNodeId === selectedNodeId) {
+      setPendingConnectionNodeId(null);
+    }
+  }, [pendingConnectionNodeId, selectedNodeId]);
 
   const handleDeleteSelectedEdge = React.useCallback(() => {
     if (!selectedEdgeId) return;
@@ -1350,10 +2452,12 @@ export default function BobarPage() {
       };
     });
     setSelectedEdgeId(null);
+    setPendingConnectionNodeId(null);
   }, [selectedEdgeId]);
 
   const handleAutoArrange = React.useCallback(() => {
     setFlowDraft((current) => (current ? autoArrangeFlow(current) : current));
+    setPendingConnectionNodeId(null);
     toastSuccess("Fluxograma reorganizado.");
   }, []);
 
@@ -1369,76 +2473,394 @@ export default function BobarPage() {
     URL.revokeObjectURL(element.href);
   }, [selectedCard]);
 
+
+  const openFlowEditor = React.useCallback(() => {
+    if (!isFlowCard) return;
+    setIsFlowEditorOpen(true);
+  }, [isFlowCard]);
+
+  const closeFlowEditor = React.useCallback(() => {
+    setIsFlowEditorOpen(false);
+    setPendingConnectionNodeId(null);
+  }, []);
+
+  React.useEffect(() => {
+    setIsFlowEditorOpen(false);
+    setPendingConnectionNodeId(null);
+  }, [selectedCardId]);
+
+  React.useEffect(() => {
+    if (isFlowCard) return;
+    setIsFlowEditorOpen(false);
+  }, [isFlowCard]);
+
+  React.useEffect(() => {
+    if (!isFlowEditorOpen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isFlowEditorOpen]);
+
+  React.useEffect(() => {
+    if (!isFlowEditorOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFlowEditorOpen(false);
+        setPendingConnectionNodeId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFlowEditorOpen]);
+
+  const flowEditorOverlay =
+    isFlowEditorOpen && isFlowCard && activeFlow && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[2147483647] h-screen w-screen overflow-hidden bg-[#020611] text-white"
+            style={{ position: "fixed", inset: 0 }}
+          >
+            <div className="flex h-screen w-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%),#020611]">
+              <div className="shrink-0 border-b border-white/10 bg-[#040914]/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
+                <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <Button
+                      variant="outline"
+                      className="h-11 w-full rounded-2xl sm:w-auto"
+                      onClick={closeFlowEditor}
+                    >
+                      Voltar
+                    </Button>
+
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                        Fluxograma · tela cheia
+                      </div>
+                      <div className="truncate text-xl font-black text-white sm:text-2xl">
+                        {cardDraft?.title?.trim() || selectedCard?.title || "Fluxograma"}
+                      </div>
+                      <div className="text-sm text-white/55">
+                        Modo aplicativo. O editor ocupa a viewport inteira e cobre até a barra lateral.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      className="h-11 rounded-2xl"
+                      variant="outline"
+                      onClick={handleAddNode}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Novo bloco
+                    </Button>
+                    <Button
+                      className="h-11 rounded-2xl"
+                      variant="outline"
+                      onClick={handleAutoArrange}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Auto-organizar
+                    </Button>
+                    <Button
+                      className="h-11 rounded-2xl"
+                      variant="outline"
+                      onClick={handleDeleteSelectedNode}
+                      disabled={!selectedNodeId}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remover bloco
+                    </Button>
+                    <Button
+                      className="h-11 rounded-2xl"
+                      variant="outline"
+                      onClick={handleDeleteSelectedEdge}
+                      disabled={!selectedEdgeId}
+                    >
+                      <Unlink className="h-4 w-4" />
+                      Remover conexão
+                    </Button>
+                    <Button
+                      className="h-11 rounded-2xl px-6"
+                      onClick={() => void handleSaveCard()}
+                      disabled={busy || !hasPendingChanges}
+                    >
+                      {busy ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      Salvar card
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-hidden px-4 py-4 sm:px-6 lg:px-8">
+                <div className="flex h-full min-h-0 flex-col gap-4 2xl:grid 2xl:grid-cols-[minmax(0,1fr)_420px]">
+                  <div className="min-h-0 min-w-0 overflow-hidden">
+                    <FlowchartCanvas
+                      flow={activeFlow}
+                      selectedNodeId={selectedNodeId}
+                      selectedEdgeId={selectedEdgeId}
+                      pendingConnectionNodeId={pendingConnectionNodeId}
+                      onSelectNode={handleSelectNode}
+                      onSelectEdge={(edgeId) => {
+                        setSelectedEdgeId(edgeId);
+                        setSelectedNodeId(null);
+                        setPendingConnectionNodeId(null);
+                      }}
+                      onMoveNode={setNodePatch}
+                      onHandleClick={handleConnectionHandleClick}
+                      viewportClassName="h-full min-h-[55vh] 2xl:min-h-0"
+                    />
+                  </div>
+
+                  <FlowEditorInspector
+                    selectedNode={selectedNode}
+                    selectedEdge={selectedEdge}
+                    selectedEdgeNodes={selectedEdgeNodes}
+                    pendingConnectionNode={pendingConnectionNode}
+                    onPatchNode={setNodePatch}
+                    onDeleteSelectedEdge={handleDeleteSelectedEdge}
+                    className="flex h-full min-h-0 flex-col overflow-hidden"
+                    contentClassName="min-h-0 flex-1 overflow-y-auto pb-6"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   const selectedTemplate = CARD_TEMPLATES.find((template) => template.key === templateKey) || null;
 
   return (
     <div className="min-h-screen bg-[#020611] px-4 py-6 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1540px] flex-col gap-6">
-        <Card variant="glass" className="overflow-visible rounded-[2.4rem] border-cyan-400/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_28%),#040914]">
-          <CardHeader className="gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
+      <div className="mx-auto flex max-w-[1560px] flex-col gap-6">
+        <Card
+          variant="glass"
+          className="overflow-hidden rounded-[2.4rem] border-cyan-400/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_28%),#040914]"
+        >
+          <CardHeader className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_520px] xl:items-start">
+            <div className="max-w-4xl">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-400/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-100">
                 <Sparkles className="h-4 w-4" />
                 Bobar · fluxo operacional
               </div>
-              <CardTitle className="text-4xl font-black tracking-tight text-white sm:text-5xl">
-                Organize cards, roteiros e fluxogramas sem ruído na interface.
+              <CardTitle className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl">
+                Organize cards, roteiros e fluxogramas com clareza desde o primeiro acesso.
               </CardTitle>
               <CardDescription className="mt-4 max-w-2xl text-base leading-8 text-white/65">
-                O quadro ficou mais direto: dropdown escuro, cards mais claros, movimento sem aquelas barras azuis estranhas e
-                conexões do fluxograma feitas por clique entre blocos.
+                O foco aqui é reduzir ruído: quadro visual previsível, edição contextual e
+                fluxograma que ensina o uso enquanto a pessoa trabalha.
+              </CardDescription>
+
+              <div className="mt-6 grid gap-3 lg:grid-cols-3">
+                <GuideStep
+                  step="01"
+                  title="Monte a estrutura"
+                  description="Crie colunas que representem etapa, status ou área de trabalho. Isso já deixa o quadro legível para quem acabou de entrar."
+                />
+                <GuideStep
+                  step="02"
+                  title="Abasteça com cards"
+                  description="Use cards para roteiros, checklists, ideias e materiais operacionais. Tudo fica com o mesmo padrão visual e de edição."
+                />
+                <GuideStep
+                  step="03"
+                  title="Desenhe o fluxo"
+                  description="Quando precisar de processo, transforme o card em fluxograma e conecte os blocos por clique, sem menus escondidos."
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <StatChip
+                  icon={<FilePlus2 className="h-5 w-5" />}
+                  label="Cards"
+                  value={cards.length}
+                />
+                <StatChip
+                  icon={<Sparkles className="h-5 w-5" />}
+                  label="Importados"
+                  value={countImportedCards(board)}
+                />
+                <StatChip
+                  icon={<GitBranch className="h-5 w-5" />}
+                  label="Fluxogramas"
+                  value={countFlowchartCards(board)}
+                />
+                <StatChip
+                  icon={<LayoutTemplate className="h-5 w-5" />}
+                  label="Com template"
+                  value={countTemplateCards(board)}
+                />
+              </div>
+
+              <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.035] p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Ações principais</div>
+                    <div className="mt-1 text-sm leading-6 text-white/55">
+                      {activeView === "quadro"
+                        ? "Comece pela estrutura do quadro e depois avance para os cards."
+                        : "Entre em Importados para abrir roteiros prontos, ver o agente de origem e produzir com tudo organizado."}
+                    </div>
+                  </div>
+                  {activeView === "quadro" && selectedCard ? (
+                    <Badge className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                      Editando agora
+                    </Badge>
+                  ) : activeView === "importados" ? (
+                    <Badge className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                      Importados ativos
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <div className="inline-flex rounded-[1.4rem] border border-white/10 bg-[#091426] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveView("quadro")}
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center rounded-[1rem] px-4 text-sm font-semibold transition",
+                        activeView === "quadro"
+                          ? "bg-cyan-400/15 text-cyan-100"
+                          : "text-white/55 hover:text-white",
+                      )}
+                    >
+                      Quadro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveView("importados")}
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center rounded-[1rem] px-4 text-sm font-semibold transition",
+                        activeView === "importados"
+                          ? "bg-cyan-400/15 text-cyan-100"
+                          : "text-white/55 hover:text-white",
+                      )}
+                    >
+                      Importados
+                    </button>
+                  </div>
+
+                  {activeView === "quadro" ? (
+                    <>
+                      <Button
+                        className="h-12 rounded-2xl px-6"
+                        onClick={openCreateColumnDialog}
+                        disabled={busy}
+                      >
+                        <Columns3 className="h-4 w-4" />
+                        Criar coluna
+                      </Button>
+                      <Button
+                        className="h-12 rounded-2xl px-6"
+                        variant="outline"
+                        onClick={() => void handleCreateCard()}
+                        disabled={busy || !boardHasColumns}
+                      >
+                        <FilePlus2 className="h-4 w-4" />
+                        Novo card
+                      </Button>
+                    </>
+                  ) : null}
+
+                  <div className="flex min-h-12 flex-1 items-center rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 text-sm text-white/60">
+                    {activeView === "quadro" ? (
+                      selectedCard ? (
+                        <span className="truncate">
+                          Card selecionado:{" "}
+                          <span className="font-semibold text-white">{selectedCard.title}</span>
+                        </span>
+                      ) : boardHasColumns ? (
+                        "Selecione um card no quadro para abrir o editor."
+                      ) : (
+                        "Crie a primeira coluna para começar a montar o quadro."
+                      )
+                    ) : importedCards.length ? (
+                      <span className="truncate">
+                        Importado selecionado:{" "}
+                        <span className="font-semibold text-white">
+                          {importedCards.find((card) => card.id === selectedImportedCardId)?.title ||
+                            importedCards[0]?.title}
+                        </span>
+                      </span>
+                    ) : (
+                      "Ainda não existem roteiros importados no Bobar."
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {activeView === "importados" ? (
+          loading ? (
+            <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+              <CardContent className="flex min-h-[240px] items-center justify-center">
+                <Loader2 className="h-7 w-7 animate-spin text-cyan-200" />
+              </CardContent>
+            </Card>
+          ) : (
+            <BobarImportsPanel
+              cards={importedCards}
+              selectedCardId={selectedImportedCardId}
+              onSelectCard={setSelectedImportedCardId}
+            />
+          )
+        ) : (
+        <>
+        <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+          <CardHeader className="gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                Quadro visual
+              </div>
+              <CardTitle className="mt-2 text-3xl font-black text-white">
+                Cards organizados por coluna
+              </CardTitle>
+              <CardDescription className="mt-2 max-w-3xl text-white/55">
+                O quadro precisa ser escaneável em segundos. Clique para editar, arraste para mover
+                e use os botões da própria coluna para ajustes estruturais.
               </CardDescription>
             </div>
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[520px]">
-              <StatChip icon={<FilePlus2 className="h-5 w-5" />} label="Cards" value={board?.total_cards || 0} />
-              <StatChip icon={<Sparkles className="h-5 w-5" />} label="Importados" value={countImportedCards(board)} />
-              <StatChip icon={<GitBranch className="h-5 w-5" />} label="Fluxogramas" value={countFlowchartCards(board)} />
-              <StatChip icon={<LayoutTemplate className="h-5 w-5" />} label="Com template" value={countTemplateCards(board)} />
+            <div className="flex flex-wrap gap-2">
+              <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                {manualBoard?.columns.length || 0} colunas
+              </Badge>
+              <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                {cards.length} cards
+              </Badge>
+              {selectedCard ? (
+                <Badge className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                  {typeLabel(cardDraft?.card_type)}
+                </Badge>
+              ) : null}
             </div>
           </CardHeader>
 
-          <CardContent className="grid gap-4 border-t border-white/10 pt-6 lg:grid-cols-[1fr_auto_auto]">
-            <Input
-              value={newColumnName}
-              onChange={(event) => setNewColumnName(event.target.value)}
-              placeholder="Nome de uma nova coluna"
-              className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleCreateColumn();
-                }
-              }}
-            />
-            <Button className="h-12 rounded-2xl px-6" onClick={() => void handleCreateColumn()} disabled={busy || !newColumnName.trim()}>
-              <Plus className="h-4 w-4" />
-              Criar coluna
-            </Button>
-            <Button className="h-12 rounded-2xl px-6" variant="outline" onClick={() => void handleCreateCard()} disabled={busy || !board?.columns.length}>
-              <FilePlus2 className="h-4 w-4" />
-              Novo card
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
-          <CardHeader>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Quadro visual</div>
-            <CardTitle className="text-3xl font-black text-white">Cards organizados por coluna</CardTitle>
-            <CardDescription className="text-white/55">
-              Clique para editar. Arraste para mover de uma coluna para outra. O destaque agora fica só na coluna de destino.
-            </CardDescription>
-          </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex min-h-[220px] items-center justify-center">
+              <div className="flex min-h-[240px] items-center justify-center">
                 <Loader2 className="h-7 w-7 animate-spin text-cyan-200" />
               </div>
-            ) : board?.columns.length ? (
-              <div className="overflow-x-auto pb-2">
-                <div className="flex min-w-max gap-4">
-                  {board.columns.map((column) => (
+            ) : manualBoard?.columns.length ? (
+              <div className="overflow-x-auto pb-4">
+                <div className="flex min-w-max snap-x snap-mandatory gap-4">
+                  {manualBoard?.columns.map((column) => (
                     <ColumnLane
                       key={column.id}
                       column={column}
@@ -1451,87 +2873,116 @@ export default function BobarPage() {
                       dragOverColumnId={dragOverColumnId}
                       onStartDragCard={handleStartDragCard}
                       onEndDragCard={handleEndDragCard}
-                      onDragColumn={(columnId) => setDragOverColumnId(columnId > 0 ? columnId : null)}
+                      onDragColumn={(columnId) =>
+                        setDragOverColumnId(columnId > 0 ? columnId : null)
+                      }
                       onDropColumn={(columnId) => void handleDropColumn(columnId)}
                     />
                   ))}
                 </div>
               </div>
             ) : (
-              <EmptyState
-                title="Nenhuma coluna criada ainda"
-                description="Crie sua primeira coluna para começar a organizar roteiros, ideias e fluxogramas dentro do Bobar."
-              />
+              <div className="space-y-5">
+                <EmptyState
+                  title="Nenhuma coluna criada ainda"
+                  description="Comece criando a primeira coluna do fluxo. Isso organiza o quadro e evita uma tela vazia sem direção para quem está acessando pela primeira vez."
+                />
+                <div className="flex justify-center">
+                  <Button className="h-12 rounded-2xl px-6" onClick={openCreateColumnDialog}>
+                    <Columns3 className="h-4 w-4" />
+                    Criar primeira coluna
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_420px]">
-          <Card variant="glass" className="overflow-visible rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <Card
+            id="bobar-editor"
+            variant="glass"
+            className="overflow-visible rounded-[2.2rem] border-cyan-400/10 bg-[#040914]"
+          >
             <CardHeader className="gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Estúdio do Bobar</div>
-                  <CardTitle className="mt-2 text-3xl font-black text-white">{selectedCard?.title || "Selecione um card"}</CardTitle>
-                  <CardDescription className="mt-2 text-white/55">
-                    Edite os dados do card e salve. Para fluxograma, clique em um bloco e depois em outro para ligar ou desligar a conexão.
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                    Editor principal
+                  </div>
+                  <CardTitle className="mt-2 break-words text-3xl font-black text-white">
+                    {selectedCard?.title || "Selecione um card"}
+                  </CardTitle>
+                  <CardDescription className="mt-2 max-w-3xl text-white/55">
+                    {selectedCard
+                      ? "Edite os metadados, o conteúdo e, se necessário, o fluxograma. A interface foi organizada para deixar ação e contexto no lugar certo."
+                      : "Escolha um card no quadro para abrir o editor completo. Enquanto isso, o painel lateral mostra como a experiência funciona."}
                   </CardDescription>
                 </div>
 
                 {selectedCard ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={cn("rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em]", typeBadgeClasses(cardDraft?.card_type))}>
+                    <Badge
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                        typeBadgeClasses(cardDraft?.card_type),
+                      )}
+                    >
                       {typeLabel(cardDraft?.card_type)}
                     </Badge>
                     <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-white/55">
                       Atualizado {formatDate(selectedCard.updated_at)}
                     </Badge>
+                    {hasPendingChanges ? (
+                      <Badge className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                        Alterações pendentes
+                      </Badge>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
-
-              {selectedCard ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <SelectField
-                    label="Tipo do card"
-                    value={String(cardDraft?.card_type || "")}
-                    options={cardTypeOptions}
-                    onChange={(value) => {
-                      setCardDraft((current) => (current ? { ...current, card_type: value } : current));
-                      if (value === "fluxograma" && (!flowDraft || !flowDraft.nodes.length)) {
-                        const nextFlow = parseFlowchart("", cardDraft?.title || selectedCard.title, cardDraft?.content_text || selectedCard.content_text);
-                        setFlowDraft(nextFlow);
-                        setSelectedNodeId(nextFlow.nodes[0]?.id || null);
-                      }
-                    }}
-                  />
-                  <SelectField
-                    label="Template premium"
-                    value={templateKey}
-                    options={templateOptions}
-                    placeholder="Escolha um template"
-                    onChange={setTemplateKey}
-                  />
-                </div>
-              ) : null}
-
-              {selectedCard && selectedTemplate ? (
-                <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
-                  <div className="font-semibold text-white">{selectedTemplate.label}</div>
-                  <div className="mt-1">{selectedTemplate.description}</div>
-                </div>
-              ) : null}
             </CardHeader>
 
             <CardContent className="space-y-6">
               {selectedCard && cardDraft ? (
                 <>
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <SelectField
+                      label="Tipo do card"
+                      value={String(cardDraft.card_type || "")}
+                      options={cardTypeOptions}
+                      onChange={handleCardTypeChange}
+                    />
+
+                    <SelectField
+                      label="Template"
+                      value={templateKey}
+                      options={templateOptions}
+                      placeholder="Escolha um template"
+                      onChange={applyTemplateByKey}
+                    />
+                  </div>
+
+                  {selectedTemplate ? (
+                    <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
+                      <div className="font-semibold text-white">{selectedTemplate.label}</div>
+                      <div className="mt-1">{selectedTemplate.description}</div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_320px]">
                     <div className="space-y-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Título do card</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                        Título do card
+                      </div>
                       <Input
                         value={cardDraft.title}
-                        onChange={(event) => setCardDraft((current) => (current ? { ...current, title: event.target.value } : current))}
+                        onChange={(event) =>
+                          setCardDraft((current) =>
+                            current ? { ...current, title: event.target.value } : current,
+                          )
+                        }
+                        placeholder="Dê um nome claro para o card"
                         className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
                       />
                     </div>
@@ -1541,213 +2992,145 @@ export default function BobarPage() {
                       value={String(cardDraft.column_id)}
                       options={columnOptions}
                       onChange={(value) =>
-                        setCardDraft((current) => (current ? { ...current, column_id: Number(value) } : current))
+                        setCardDraft((current) =>
+                          current ? { ...current, column_id: Number(value) } : current,
+                        )
                       }
                     />
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-                    <Button className="h-12 rounded-2xl" onClick={handleApplyTemplate} disabled={!templateKey}>
-                      <Wand2 className="h-4 w-4" />
-                      Aplicar template
-                    </Button>
-                    {selectedCardType !== "fluxograma" ? (
-                      <Button
-                        variant="outline"
-                        className="h-12 rounded-2xl"
-                        onClick={() => {
-                          const nextFlow = parseFlowchart("", cardDraft.title, cardDraft.content_text);
-                          setFlowDraft(nextFlow);
-                          setSelectedNodeId(nextFlow.nodes[0]?.id || null);
-                          setCardDraft((current) => (current ? { ...current, card_type: "fluxograma" } : current));
-                          toastSuccess("Card transformado em fluxograma no editor.");
-                        }}
-                      >
-                        <GitBranch className="h-4 w-4" />
-                        Transformar em fluxograma
+                  {isFlowCard ? (
+                    <div className="flex flex-wrap items-center gap-3 rounded-[1.8rem] border border-white/10 bg-white/[0.03] p-4">
+                      <Button className="h-11 rounded-2xl" onClick={openFlowEditor}>
+                        <Pencil className="h-4 w-4" />
+                        Editar fluxograma
                       </Button>
-                    ) : null}
-                    <Button variant="outline" className="h-12 rounded-2xl" onClick={handleExportText}>
-                      <FilePlus2 className="h-4 w-4" />
-                      Baixar texto
-                    </Button>
-                    <Button variant="outline" className="h-12 rounded-2xl text-red-200 hover:text-red-100" onClick={handleDeleteCard}>
-                      <Trash2 className="h-4 w-4" />
-                      Excluir card
-                    </Button>
-                  </div>
 
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Observações</div>
-                    <Textarea
-                      value={cardDraft.note}
-                      onChange={(event) => setCardDraft((current) => (current ? { ...current, note: event.target.value } : current))}
-                      placeholder="Observações operacionais, contexto ou objetivo do card."
-                      className="min-h-[112px] rounded-[1.6rem] border-cyan-400/15 bg-[#0a1225]"
-                    />
-                  </div>
+                      <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                        {activeFlow?.nodes.length || 0} blocos
+                      </Badge>
+
+                      <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                        {activeFlow?.edges.length || 0} conexões
+                      </Badge>
+                    </div>
+                  ) : null}
 
                   {isFlowCard ? (
-                    <div className="space-y-5">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Button className="h-11 rounded-2xl" variant="outline" onClick={handleAddNode}>
-                          <Plus className="h-4 w-4" />
-                          Novo bloco
-                        </Button>
-                        <Button className="h-11 rounded-2xl" variant="outline" onClick={handleAutoArrange}>
-                          <Sparkles className="h-4 w-4" />
-                          Auto-organizar
-                        </Button>
-                        <Button
-                          className="h-11 rounded-2xl"
-                          variant="outline"
-                          onClick={handleDeleteSelectedNode}
-                          disabled={!selectedNodeId}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Remover bloco
-                        </Button>
-                        <Button
-                          className="h-11 rounded-2xl"
-                          variant="outline"
-                          onClick={handleDeleteSelectedEdge}
-                          disabled={!selectedEdgeId}
-                        >
-                          <Unlink className="h-4 w-4" />
-                          Remover conexão
-                        </Button>
-                      </div>
+                    <Card variant="glass" className="rounded-[2rem] border-white/10 bg-[#06101f]">
+                      <CardHeader className="gap-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                          Fluxograma em tela cheia
+                        </div>
+                        <CardTitle className="text-2xl font-black text-white">
+                          Edite o fluxo fora do layout apertado
+                        </CardTitle>
+                        <CardDescription className="text-white/55">
+                          O editor do fluxograma agora abre ocupando a tela toda, inclusive por
+                          cima do menu lateral, com botão de voltar e todos os controles de edição.
+                        </CardDescription>
+                      </CardHeader>
 
-                      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <FlowchartCanvas
-                          flow={flowDraft || parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text)}
-                          selectedNodeId={selectedNodeId}
-                          selectedEdgeId={selectedEdgeId}
-                          onNodeActivate={handleNodeActivate}
-                          onSelectEdge={(edgeId) => {
-                            setSelectedEdgeId(edgeId);
-                            setSelectedNodeId(null);
-                          }}
-                          onMoveNode={setNodePatch}
-                        />
+                      <CardContent className="space-y-5">
+                        <div className="grid gap-3 lg:grid-cols-3">
+                          <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-4 py-4">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                              Blocos
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-white">
+                              {activeFlow?.nodes.length || 0}
+                            </div>
+                          </div>
 
-                        <Card variant="glass" className="rounded-[2rem] border-white/10 bg-[#06101f]">
-                          <CardHeader>
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Inspector</div>
-                            <CardTitle className="text-2xl font-black text-white">
-                              {selectedNode ? "Editar bloco" : selectedEdge ? "Editar conexão" : "Selecione um item"}
-                            </CardTitle>
-                            <CardDescription className="text-white/55">
-                              Clique em um bloco. Se clicar em outro bloco depois, a conexão entre eles é criada ou removida na hora.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {selectedNode ? (
-                              <>
-                                <div className="space-y-2">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Título do bloco</div>
-                                  <Input
-                                    value={selectedNode.title}
-                                    onChange={(event) => setNodePatch(selectedNode.id, { title: event.target.value })}
-                                    className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
-                                  />
-                                </div>
+                          <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-4 py-4">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                              Conexões
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-white">
+                              {activeFlow?.edges.length || 0}
+                            </div>
+                          </div>
 
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                  <div className="space-y-2">
-                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Tempo</div>
-                                    <Input
-                                      value={selectedNode.time || ""}
-                                      onChange={(event) => setNodePatch(selectedNode.id, { time: event.target.value })}
-                                      placeholder="0-3s"
-                                      className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
-                                    />
-                                  </div>
+                          <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
+                            Para mexer no fluxo, abra o editor em tela cheia. Lá ficam o canvas, o
+                            inspector e os botões de edição.
+                          </div>
+                        </div>
 
-                                  <SelectField
-                                    label="Tipo do bloco"
-                                    value={String(selectedNode.kind || "step")}
-                                    options={[
-                                      { value: "hook", label: "Hook" },
-                                      { value: "step", label: "Passo" },
-                                      { value: "support", label: "Prova" },
-                                      { value: "timeline", label: "Linha do tempo" },
-                                      { value: "cta", label: "CTA" },
-                                    ]}
-                                    onChange={(value) => setNodePatch(selectedNode.id, { kind: value })}
-                                  />
-                                </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button className="h-11 rounded-2xl" onClick={openFlowEditor}>
+                            <Pencil className="h-4 w-4" />
+                            Editar fluxograma
+                          </Button>
 
-                                <div className="space-y-2">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Conteúdo do bloco</div>
-                                  <Textarea
-                                    value={selectedNode.content}
-                                    onChange={(event) => setNodePatch(selectedNode.id, { content: event.target.value })}
-                                    placeholder="Texto, fala, ação ou instrução desse bloco."
-                                    className="min-h-[200px] rounded-[1.6rem] border-cyan-400/15 bg-[#0a1225]"
-                                  />
-                                </div>
-
-                                <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-4 text-sm leading-6 text-cyan-50/85">
-                                  Para conectar, mantenha esse bloco selecionado e clique em outro no canvas. Se a conexão já existir,
-                                  ela será removida.
-                                </div>
-                              </>
-                            ) : selectedEdge ? (
-                              <>
-                                <div className="space-y-2">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Label da conexão</div>
-                                  <Input
-                                    value={selectedEdge.label || ""}
-                                    onChange={(event) =>
-                                      setFlowDraft((current) =>
-                                        current
-                                          ? {
-                                              ...current,
-                                              edges: current.edges.map((edge) =>
-                                                edge.id === selectedEdge.id ? { ...edge, label: event.target.value } : edge
-                                              ),
-                                            }
-                                          : current
-                                      )
-                                    }
-                                    placeholder="Ex.: valida, aprofunda, próxima etapa"
-                                    className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
-                                  />
-                                </div>
-
-                                <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.035] px-4 py-4 text-sm leading-6 text-white/60">
-                                  A conexão foi selecionada no canvas. Você pode rotular aqui ou remover com um clique no botão acima.
-                                </div>
-                              </>
-                            ) : (
-                              <EmptyState
-                                title="Nada selecionado"
-                                description="Clique em um bloco para editar. Depois clique em outro bloco para conectar ou desconectar a ligação entre eles."
-                              />
-                            )}
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
+                          {pendingConnectionNode ? (
+                            <div className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/8 px-4 py-3 text-sm leading-6 text-cyan-50/85">
+                              Conexão iniciada em <strong>{pendingConnectionNode.title}</strong>.
+                            </div>
+                          ) : null}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : isChecklistCard ? (
+                    <ChecklistEditor
+                      items={checklistDraft}
+                      summary={checklistSummary}
+                      onToggleItem={handleChecklistItemToggle}
+                      onChangeItemText={handleChecklistItemTextChange}
+                      onAddItem={handleAddChecklistItem}
+                      onRemoveItem={handleRemoveChecklistItem}
+                      onClearCompleted={handleClearCompletedChecklistItems}
+                    />
                   ) : (
                     <div className="space-y-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Conteúdo do card</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                        Conteúdo do card
+                      </div>
                       <Textarea
                         value={cardDraft.content_text}
-                        onChange={(event) => setCardDraft((current) => (current ? { ...current, content_text: event.target.value } : current))}
+                        onChange={(event) =>
+                          setCardDraft((current) =>
+                            current ? { ...current, content_text: event.target.value } : current,
+                          )
+                        }
                         placeholder="Cole aqui o roteiro, checklist, ideia ou texto operacional."
-                        className="min-h-[380px] rounded-[1.8rem] border-cyan-400/15 bg-[#0a1225]"
+                        className="min-h-[420px] rounded-[1.8rem] border-cyan-400/15 bg-[#0a1225]"
                       />
                     </div>
                   )}
 
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                      Observações
+                    </div>
+                    <Textarea
+                      value={cardDraft.note}
+                      onChange={(event) =>
+                        setCardDraft((current) =>
+                          current ? { ...current, note: event.target.value } : current,
+                        )
+                      }
+                      placeholder="Contexto, observações operacionais, responsáveis ou qualquer informação que ajude outra pessoa a entender esse card."
+                      className="min-h-[140px] rounded-[1.6rem] border-cyan-400/15 bg-[#0a1225]"
+                    />
+                  </div>
+
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.8rem] border border-white/10 bg-white/[0.03] px-4 py-4">
                     <div className="text-sm text-white/60">
-                      {hasPendingChanges ? "Existem alterações pendentes no card." : "Tudo salvo ou sem alterações pendentes."}
+                      {hasPendingChanges
+                        ? "Existem alterações pendentes no card."
+                        : "Tudo salvo ou sem alterações pendentes."}
                     </div>
-                    <Button className="h-12 rounded-2xl px-6" onClick={() => void handleSaveCard()} disabled={busy || !hasPendingChanges}>
-                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    <Button
+                      className="h-12 rounded-2xl px-6"
+                      onClick={() => void handleSaveCard()}
+                      disabled={busy || !hasPendingChanges}
+                    >
+                      {busy ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
                       Salvar card
                     </Button>
                   </div>
@@ -1755,86 +3138,332 @@ export default function BobarPage() {
               ) : (
                 <EmptyState
                   title="Selecione um card para editar"
-                  description="Clique em qualquer card do quadro para abrir o editor e trabalhar o conteúdo, o fluxo ou as conexões."
+                  description="Clique em qualquer card do quadro para abrir o editor. A organização agora está pensada para deixar claro o que editar, onde salvar e como navegar."
                 />
               )}
             </CardContent>
           </Card>
 
-          <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
-            <CardHeader>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Resumo rápido</div>
-              <CardTitle className="text-3xl font-black text-white">Foco no que importa</CardTitle>
-              <CardDescription className="text-white/55">
-                Área lateral mais enxuta para evitar ruído no quadro e no editor principal.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                  <Link2 className="h-4 w-4 text-cyan-200" />
-                  Conexões mais intuitivas
+          <div className="space-y-6">
+            <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+              <CardHeader>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                  Contexto do card
                 </div>
-                <div className="text-sm leading-6 text-white/60">
-                  No fluxograma, clique em um bloco e depois em outro. A ligação é criada na hora. Se já existir, sai na hora.
-                </div>
-              </div>
+                <CardTitle className="text-3xl font-black text-white">
+                  Painel lateral útil
+                </CardTitle>
+                <CardDescription className="text-white/55">
+                  Em vez de repetir informação, o lado direito mostra contexto, status e atalhos que
+                  ajudam na tomada de decisão.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {selectedCard ? (
+                  <>
+                    <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-200">
+                          <FolderKanban className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="break-words text-base font-semibold text-white">
+                            {selectedCard.title}
+                          </div>
+                          <div className="text-sm text-white/45">
+                            {typeLabel(cardDraft?.card_type)}
+                          </div>
+                        </div>
+                      </div>
 
-              <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                  <GripVertical className="h-4 w-4 text-cyan-200" />
-                  Arrasto mais limpo
-                </div>
-                <div className="text-sm leading-6 text-white/60">
-                  Cards entre colunas agora usam só o destaque da coluna destino. Sem barras azuis espalhadas no quadro.
-                </div>
-              </div>
+                      <div className="space-y-3">
+                        <InfoRow label="Coluna" value={selectedColumn?.name || "—"} emphasized />
+                        <InfoRow label="Origem" value={selectedCard.source_label || "Manual"} />
+                        <InfoRow
+                          label="Última atualização"
+                          value={formatDate(selectedCard.updated_at)}
+                        />
+                        <InfoRow
+                          label="Status"
+                          value={
+                            hasPendingChanges ? (
+                              <span className="font-semibold text-amber-100">
+                                Alterações pendentes
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-emerald-100">Sem pendências</span>
+                            )
+                          }
+                        />
+                        {String(cardDraft?.card_type || "").toLowerCase() === "checklist" ? (
+                          <InfoRow
+                            label="Checklist"
+                            value={`${checklistSummary.checked}/${checklistSummary.total} concluídos`}
+                          />
+                        ) : null}
+                        {String(cardDraft?.card_type || "").toLowerCase() === "fluxograma" ? (
+                          <InfoRow
+                            label="Estrutura"
+                            value={`${(flowDraft || parseFlowchart(selectedCard.structure_json, selectedCard.title, selectedCard.content_text)).nodes.length} blocos`}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
 
-              <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                  <LayoutTemplate className="h-4 w-4 text-cyan-200" />
-                  Dropdown premium escuro
-                </div>
-                <div className="text-sm leading-6 text-white/60">
-                  Os seletores de tipo e template deixaram de depender do dropdown nativo branco do navegador.
-                </div>
-              </div>
-
-              <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                  <Wand2 className="h-4 w-4 text-cyan-200" />
-                  Templates continuam operacionais
-                </div>
-                <div className="text-sm leading-6 text-white/60">
-                  Você pode aplicar um template no card selecionado e salvar. Para fluxograma, o template já entra estruturado.
-                </div>
-              </div>
-
-              {cards.length ? (
-                <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
-                  <div className="text-sm font-semibold text-white">Cards disponíveis</div>
-                  <div className="mt-3 space-y-2">
-                    {cards.slice(0, 6).map((card) => (
-                      <button
-                        key={card.id}
-                        type="button"
-                        onClick={() => setSelectedCardId(card.id)}
-                        className={cn(
-                          "w-full rounded-2xl border px-4 py-3 text-left transition",
-                          selectedCardId === card.id ? "border-cyan-300/50 bg-cyan-400/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
-                        )}
+                    <div className="grid gap-3">
+                      <Button
+                        className="h-11 rounded-2xl"
+                        onClick={() => void handleSaveCard()}
+                        disabled={busy || !hasPendingChanges}
                       >
-                        <div className="text-sm font-medium text-white">{card.title}</div>
-                        <div className="mt-1 text-xs text-white/45">{typeLabel(card.card_type)}</div>
-                      </button>
-                    ))}
+                        {busy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                        Salvar card
+                      </Button>
+                      <Button
+                        className="h-11 rounded-2xl"
+                        variant="outline"
+                        onClick={handleExportText}
+                      >
+                        <FilePlus2 className="h-4 w-4" />
+                        Baixar texto
+                      </Button>
+                      <Button
+                        className="h-11 rounded-2xl text-red-200 hover:text-red-100"
+                        variant="outline"
+                        onClick={openDeleteSelectedCardDialog}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Excluir card
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState
+                    title="Sem card selecionado"
+                    description="Escolha um card no quadro para ver contexto, status e ações rápidas neste painel."
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+              <CardHeader>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                  Guia rápido
+                </div>
+                <CardTitle className="text-3xl font-black text-white">
+                  Primeiros passos claros
+                </CardTitle>
+                <CardDescription className="text-white/55">
+                  O objetivo aqui é fazer a pessoa entender o fluxo sem depender de tentativa e
+                  erro.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+                    <Columns3 className="h-4 w-4 text-cyan-200" />
+                    Estruture primeiro
+                  </div>
+                  <div className="text-sm leading-6 text-white/60">
+                    Pense nas colunas como etapas do processo. Quando isso fica claro, o quadro
+                    inteiro fica mais intuitivo.
                   </div>
                 </div>
-              ) : null}
-            </CardContent>
-          </Card>
+
+                <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+                    <MousePointerClick className="h-4 w-4 text-cyan-200" />
+                    Clique, depois edite
+                  </div>
+                  <div className="text-sm leading-6 text-white/60">
+                    O clique no card abre o editor completo. No fluxograma, o clique também serve
+                    para conectar blocos sem abrir menus extras.
+                  </div>
+                </div>
+
+                <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+                    <Link2 className="h-4 w-4 text-cyan-200" />
+                    Fluxo legível
+                  </div>
+                  <div className="text-sm leading-6 text-white/60">
+                    Use rótulos nas conexões apenas quando agregarem contexto. O importante é que
+                    outra pessoa consiga entender o caminho olhando rápido.
+                  </div>
+                </div>
+
+                <div className="rounded-[1.8rem] border border-dashed border-cyan-400/20 bg-cyan-400/8 p-5 text-sm leading-6 text-cyan-50/90">
+                  Dica prática: cards simples resolvem melhor conteúdo textual. Reserve o fluxograma
+                  para sequência, decisão, narrativa visual ou dependência entre etapas.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+              <CardHeader>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                  Últimos cards
+                </div>
+                <CardTitle className="text-3xl font-black text-white">
+                  Continue de onde parou
+                </CardTitle>
+                <CardDescription className="text-white/55">
+                  Lista rápida para retomar o trabalho sem procurar pelo quadro inteiro.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {recentCards.length ? (
+                  recentCards.map((card) => (
+                    <button
+                      key={card.id}
+                      type="button"
+                      onClick={() => setSelectedCardId(card.id)}
+                      className={cn(
+                        "w-full rounded-[1.4rem] border px-4 py-3 text-left transition",
+                        selectedCardId === card.id
+                          ? "border-cyan-300/50 bg-cyan-400/10"
+                          : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="break-words text-sm font-medium text-white">
+                            {card.title}
+                          </div>
+                          <div className="mt-1 text-xs text-white/45">
+                            {typeLabel(card.card_type)} · {formatDate(card.updated_at)}
+                          </div>
+                        </div>
+                        <ArrowRight className="h-4 w-4 shrink-0 text-white/35" />
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <EmptyState
+                    title="Nenhum card ainda"
+                    description="Quando os cards forem criados, esta área ajuda a retomar o trabalho mais recente."
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
+        </>
+        )}
       </div>
+
+      {flowEditorOverlay}
+
+      <Dialog
+        open={Boolean(columnDialog)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setColumnDialog(null);
+            setColumnNameDraft("");
+          }
+        }}
+      >
+        <DialogContent>
+          <form className="space-y-5" onSubmit={handleSubmitColumnDialog}>
+            <DialogHeader>
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                <Columns3 className="h-3.5 w-3.5" />
+                {columnDialog?.mode === "rename" ? "Editar estrutura" : "Nova estrutura"}
+              </div>
+              <DialogTitle>
+                {columnDialog?.mode === "rename" ? "Renomear coluna" : "Criar coluna"}
+              </DialogTitle>
+              <DialogDescription>
+                {columnDialog?.mode === "rename"
+                  ? "Use um nome direto e previsível. Isso melhora a leitura do quadro para qualquer pessoa que entrar depois."
+                  : "Crie uma coluna com nome objetivo. Bons exemplos: Entrada, Em produção, Revisão, Publicado."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Nome da coluna
+              </div>
+              <Input
+                value={columnNameDraft}
+                onChange={(event) => setColumnNameDraft(event.target.value)}
+                placeholder="Ex.: Em produção"
+                autoFocus
+                className="h-12 rounded-2xl border-cyan-400/20 bg-[#0a1225]"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-2xl"
+                onClick={() => setColumnDialog(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="h-11 rounded-2xl"
+                disabled={busy || !columnNameDraft.trim()}
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {columnDialog?.mode === "rename" ? "Salvar nome" : "Criar coluna"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteDialog)} onOpenChange={(open) => !open && setDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-100">
+              <CircleAlert className="h-3.5 w-3.5" />
+              Ação destrutiva
+            </div>
+            <DialogTitle>
+              {deleteDialog?.type === "column" ? "Excluir coluna" : "Excluir card"}
+            </DialogTitle>
+            <DialogDescription>
+              {deleteDialog?.type === "column"
+                ? `A coluna "${deleteDialog.column.name}" será removida. Os cards serão movidos automaticamente para outra coluna pelo backend.`
+                : `O card "${deleteDialog?.type === "card" ? deleteDialog.card.title : ""}" será excluído permanentemente.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-white/60">
+            Confirme apenas se tiver certeza. A interface foi ajustada para evitar pop-ups nativos e
+            deixar essa decisão mais clara.
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-2xl"
+              onClick={() => setDeleteDialog(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-11 rounded-2xl"
+              onClick={() => void handleConfirmDelete()}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Confirmar exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
