@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -49,13 +50,6 @@ import { GoogleBusinessApplyModal, parseGoogleBusinessPreview } from "@/componen
 import { exportAuthorityFormat as exportFormat } from "@/lib/authorityExport";
 import { bobarService } from "@/services/bobar";
 import { buildAuthorityImportPayload } from "@/lib/bobarImported";
-
-const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
-
-function buildScopedStorageKey(userEmail?: string | null): string {
-  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
-  return `${STORAGE_KEY_PREFIX}:${normalized}`;
-}
 
 type ExtraFieldValues = Record<string, string>;
 type VideoFormatRecommendation = {
@@ -436,8 +430,13 @@ export default function AuthorityAgentRunPage() {
   const [isSendingToBobar, setIsSendingToBobar] = useState(false);
 
   const { user, deductCredits } = useAuthStore();
-  const storageKey = React.useMemo(() => buildScopedStorageKey(user?.email), [user?.email]);
   const agent = AUTHORITY_AGENTS.find((a) => a.key === agentKey);
+  const { data: businessCore } = useQuery({
+    queryKey: ["business-core", "authority-agent-run", user?.email],
+    queryFn: () => api.robots.businessCore.get("business-core"),
+    enabled: Boolean(user?.email),
+  });
+  const runtimeNucleus = React.useMemo(() => ({ ...(businessCore || {}) }), [businessCore]);
   const tasks = agentKey ? tasksByAgentKey(agentKey) : [];
 
   useEffect(() => {
@@ -519,11 +518,11 @@ export default function AuthorityAgentRunPage() {
 
     setIsAnalyzingVideoFormat(true);
     try {
-      const rawNucleus = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      const rawNucleus = runtimeNucleus;
       const res = await api.authorityAgents.suggestVideoFormat({
         agent_key: agentKey,
         theme,
-        nucleus: rawNucleus,
+        nucleus: { ...rawNucleus },
       });
       setVideoFormatRecommendation(res);
       return res;
@@ -552,11 +551,11 @@ export default function AuthorityAgentRunPage() {
 
     setIsFetchingThemes(true);
     try {
-      const rawNucleus = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      const rawNucleus = runtimeNucleus;
       const res = await api.authorityAgents.suggestThemes({
         agent_key: agentKey,
         task: themeModalTask?.prompt || themeModalTask?.title || "",
-        nucleus: rawNucleus,
+        nucleus: { ...rawNucleus },
       });
       deductCredits(2);
       setSuggestedThemes(res.themes || []);
@@ -597,7 +596,7 @@ export default function AuthorityAgentRunPage() {
     setIsEditing(false);
 
     try {
-      const rawNucleus = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      const rawNucleus = runtimeNucleus;
       const payload = {
         client_id: getClientId(),
         agent_key: agentKey,

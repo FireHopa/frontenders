@@ -46,7 +46,17 @@ export default function ImageHistoryView({ onBack }: Props) {
   const [isDownloading, setIsDownloading] = useState<string>("");
 
   useEffect(() => {
-    setItems(readImageHistory());
+    let active = true;
+    void readImageHistory()
+      .then((history) => {
+        if (active) setItems(history);
+      })
+      .catch(() => {
+        if (active) setItems([]);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const groupedStats = useMemo(() => {
@@ -55,8 +65,8 @@ export default function ImageHistoryView({ onBack }: Props) {
     return { generated, edited, total: items.length };
   }, [items]);
 
-  const handleClear = () => {
-    writeImageHistory([]);
+  const handleClear = async () => {
+    await writeImageHistory([]);
     setItems([]);
   };
 

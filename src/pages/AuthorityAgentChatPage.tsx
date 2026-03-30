@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Particles } from "@/components/effects/Particles";
@@ -28,24 +29,6 @@ import { bobarService } from "@/services/bobar";
 import { buildAuthorityImportPayload } from "@/lib/bobarImported";
 import { ArrowLeft, Loader2, Sparkles, RotateCcw, Printer, ChevronDown, FileText, Linkedin, Instagram, Facebook, Youtube, FolderKanban } from "lucide-react";
 
-const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
-
-function buildScopedStorageKey(userEmail?: string | null): string {
-  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
-  return `${STORAGE_KEY_PREFIX}:${normalized}`;
-}
-
-function loadStoredNucleus(storageKey: string): Record<string, any> {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 const ICEBREAKERS_GENERIC = [
   "Gere um plano rápido em tópicos",
   "Crie um checklist de execução",
@@ -68,7 +51,6 @@ export default function AuthorityAgentChatPage() {
   const agent = authorityAgentByKey(agentKey);
 
   const clientId = React.useMemo(() => getClientId(), []);
-  const nucleus = React.useMemo(() => (typeof window === "undefined" ? {} : loadStoredNucleus(storageKey)), []);
 
   const [mode, setMode] = React.useState<ViewMode>("mindmap");
   const [resultMd, setResultMd] = React.useState<string>("");
@@ -96,7 +78,12 @@ export default function AuthorityAgentChatPage() {
   const [showDownloadMenu, setShowDownloadMenu] = React.useState(false);
   const [isSendingToBobar, setIsSendingToBobar] = React.useState(false);
   const { user } = useAuthStore();
-  const storageKey = React.useMemo(() => buildScopedStorageKey(user?.email), [user?.email]);
+  const { data: businessCore } = useQuery({
+    queryKey: ["business-core", "authority-agent-chat", user?.email],
+    queryFn: () => api.robots.businessCore.get("business-core"),
+    enabled: Boolean(user?.email),
+  });
+  const nucleus = React.useMemo(() => ({ ...(businessCore || {}) }), [businessCore]);
 
   const filled = React.useMemo(() => {
     const keys = Object.keys(nucleus ?? {});
@@ -446,6 +433,7 @@ export default function AuthorityAgentChatPage() {
     setIsPublishing(true);
     try {
       const res = await youtubeService.publish({
+        title: values.title,
         description: values.description,
         privacy_status: values.privacyStatus,
         made_for_kids: values.madeForKids,

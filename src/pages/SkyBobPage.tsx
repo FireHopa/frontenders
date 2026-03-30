@@ -30,60 +30,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/state/authStore";
 
 const BUSINESS_CORE_PUBLIC_ID = "business-core";
-const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
 
-const LOCAL_NUCLEUS_FIELDS = [
-  "company_name",
-  "owner_name",
-  "city_state",
-  "service_area",
-  "main_audience",
-  "services_products",
-  "real_differentials",
-  "restrictions",
-  "reviews",
-  "testimonials",
-  "usable_links_texts",
-  "forbidden_content",
-  "site",
-  "google_business_profile",
-  "instagram",
-  "linkedin",
-  "youtube",
-  "tiktok",
-] as const;
-
-function sanitizeNucleusForLocalStorage(
-  input?: Partial<Record<(typeof LOCAL_NUCLEUS_FIELDS)[number], unknown>> | null,
-): Record<string, unknown> {
-  const next: Record<string, unknown> = {};
-  if (!input) return next;
-
-  LOCAL_NUCLEUS_FIELDS.forEach((field) => {
-    const value = input[field];
-    if (value !== undefined) {
-      next[field] = value;
-    }
-  });
-
-  return next;
-}
-
-function trySaveNucleus(storageKey: string, next: Record<string, unknown>) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(sanitizeNucleusForLocalStorage(next)));
-    return true;
-  } catch (error) {
-    console.warn("Não consegui salvar o núcleo localmente.", error);
-    return false;
-  }
-}
-
-
-function buildScopedStorageKey(userEmail?: string | null): string {
-  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
-  return `${STORAGE_KEY_PREFIX}:${normalized}`;
-}
 const NUCLEUS_FIELDS = [
   "company_name",
   "owner_name",
@@ -105,15 +52,6 @@ const NUCLEUS_FIELDS = [
   "tiktok",
 ] as const;
 
-function loadNucleus(storageKey: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}") as Record<string, unknown>;
-    return sanitizeNucleusForLocalStorage(parsed);
-  } catch {
-    return {};
-  }
-}
-
 function ensureString(value: unknown): string {
   return String(value ?? "");
 }
@@ -128,12 +66,13 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function normalizeNucleus(storageKey: string, coreData?: BusinessCoreOut | null): Record<string, unknown> {
-  const local = loadNucleus(storageKey);
-  if (!coreData) return local;
-  const merged = { ...local, ...sanitizeNucleusForLocalStorage(coreData) };
-  trySaveNucleus(storageKey, merged);
-  return merged;
+function normalizeNucleus(coreData?: BusinessCoreOut | null): Record<string, unknown> {
+  if (!coreData) return {};
+  const entries = Object.entries(coreData).filter(([key, value]) => {
+    if (key === "skybob" || key === "knowledge_files_json" || key === "knowledge_text" || key === "updated_at") return false;
+    return value !== null && value !== undefined;
+  });
+  return Object.fromEntries(entries);
 }
 
 function createHookFeedbackItem(item: SkyBobHook): SkyBobFeedbackItem<SkyBobHook> {
@@ -860,22 +799,20 @@ export default function SkyBobPage() {
   const userEmail = useAuthStore((state) => state.user?.email ?? null);
   const authToken = useAuthStore((state) => state.token);
   const navigate = useNavigate();
-  const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
-
   const { data: coreData } = useQuery({
     queryKey: ["business-core", BUSINESS_CORE_PUBLIC_ID, "skybob", userEmail],
     queryFn: () => api.robots.businessCore.get(BUSINESS_CORE_PUBLIC_ID),
     enabled: Boolean(authToken && userEmail),
   });
 
-  const nucleus = React.useMemo(() => normalizeNucleus(storageKey, coreData), [coreData, storageKey]);
+  const nucleus = React.useMemo(() => normalizeNucleus(coreData), [coreData]);
   const nucleusSignature = React.useMemo(() => buildSkyBobNucleusSignature(nucleus), [nucleus]);
 
   const [workspace, setWorkspace] = React.useState<SkyBobWorkspace>(() => createEmptySkyBobWorkspace(""));
 
   React.useEffect(() => {
     setWorkspace(createEmptySkyBobWorkspace(""));
-  }, [storageKey]);
+  }, [userEmail]);
   const workspaceRef = React.useRef(workspace);
   const [activeTab, setActiveTab] = React.useState<"study" | "hooklab">("study");
   const [isRunningStudy, setIsRunningStudy] = React.useState(false);
@@ -941,13 +878,9 @@ export default function SkyBobPage() {
     async (nextWorkspace: SkyBobWorkspace, successMessage?: string) => {
       const payload = serializeSkyBobWorkspace(nextWorkspace);
       await api.robots.businessCore.patch(BUSINESS_CORE_PUBLIC_ID, { skybob: payload });
-      const storedLocally = trySaveNucleus(storageKey, { ...loadNucleus(storageKey), ...nucleus });
-      if (!storedLocally) {
-        toastInfo("O resultado do SkyBob foi salvo no backend. O cache local foi ignorado porque o navegador ficou sem espaço.");
-      }
       if (successMessage) toastSuccess(successMessage);
     },
-    [nucleus, storageKey]
+    []
   );
 
   const setWorkspaceAndPersist = React.useCallback(

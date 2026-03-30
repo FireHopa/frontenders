@@ -40,7 +40,6 @@ export function RobotChatPage() {
   const { containerRef, endRef, isPinned, scrollToBottom } = useAutoScroll<HTMLDivElement>();
 
   const [text, setText] = React.useState("");
-  const [useWeb, setUseWeb] = React.useState(false);
   const [phase, setPhase] = React.useState<null | "thinking" | "analyzing" | "insights">(null);
 
   const busy = chat.isPending || audio.isPending;
@@ -78,7 +77,7 @@ export function RobotChatPage() {
     setText("");
 
     try {
-      await chat.mutateAsync({ message, use_web: useWeb });
+      await chat.mutateAsync({ message });
       if (isPinned) scrollToBottom();
     } catch (e) {
       toastApiError(e, "Falha ao enviar");
@@ -184,7 +183,7 @@ export function RobotChatPage() {
               ) : null}
             </div>
 
-            <ChatComposer value={text} onChange={setText} onSend={onSend} onSendAudio={onSendAudio} useWeb={useWeb} onToggleWeb={() => setUseWeb((v) => !v)} busy={busy} />
+            <ChatComposer value={text} onChange={setText} onSend={onSend} onSendAudio={onSendAudio} busy={busy} />
           </CardContent>
         </Card>
       </motion.div>

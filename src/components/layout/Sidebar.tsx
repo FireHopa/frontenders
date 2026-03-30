@@ -3,7 +3,6 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
-  Swords,
   FolderKanban,
   BookOpen,
   Video,
@@ -46,7 +45,6 @@ const items: Item[] = [
       }))
     ]
   },
-  { to: "/competition", label: "Análise da Concorrência", Icon: Swords },
   { to: "/image-engine", label: "Motor de Imagem", Icon: ImageIcon },
   { to: "/skybob", label: "SkyBob", Icon: Rocket },
   { to: "/bobar", label: "Bobar", Icon: FolderKanban },

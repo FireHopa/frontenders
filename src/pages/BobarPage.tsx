@@ -1471,9 +1471,15 @@ function FlowchartCanvas({
       <div
         ref={containerRef}
         onPointerDown={(event) => {
-          if (event.button !== 1) return;
           const container = containerRef.current;
           if (!container) return;
+
+          const isDirectCanvasTarget = event.target === event.currentTarget;
+          const isMiddleMouse = event.button === 1;
+          const isLeftMouseCanvasDrag = event.button === 0 && isDirectCanvasTarget;
+
+          if (!isMiddleMouse && !isLeftMouseCanvasDrag) return;
+
           event.preventDefault();
           panGestureRef.current = {
             startClientX: event.clientX,
@@ -1493,18 +1499,27 @@ function FlowchartCanvas({
 
           const hasVerticalOverflow = container.scrollHeight > container.clientHeight;
           const hasHorizontalOverflow = container.scrollWidth > container.clientWidth;
-
           if (!hasVerticalOverflow && !hasHorizontalOverflow) return;
+
+          const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? container.clientHeight : 1;
+          const deltaX = event.deltaX * unit;
+          const deltaY = event.deltaY * unit;
+          const prefersHorizontal = event.shiftKey || (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 0);
 
           event.preventDefault();
 
-          if (event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-            if (hasHorizontalOverflow) container.scrollLeft += event.deltaY;
+          if (prefersHorizontal && hasHorizontalOverflow) {
+            container.scrollLeft += deltaX || deltaY;
             return;
           }
 
-          if (hasVerticalOverflow) container.scrollTop += event.deltaY;
-          if (hasHorizontalOverflow) container.scrollLeft += event.deltaX;
+          if (hasVerticalOverflow) {
+            container.scrollTop += deltaY || deltaX;
+          }
+
+          if (Math.abs(deltaX) > 0 && hasHorizontalOverflow) {
+            container.scrollLeft += deltaX;
+          }
         }}
         onPointerMove={pendingSourceNode ? updateConnectionPointer : undefined}
         className={cn(

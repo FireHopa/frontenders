@@ -13,6 +13,6 @@ export function useAuthorityAgentCooldown(publicId: string, agentKey: string) {
 
 export function useRunAuthorityAgent(publicId: string, agentKey: string) {
   return useMutation<AuthorityAgentRunResponse, unknown, AuthorityAgentRunRequest>({
-    mutationFn: (body) => api.robots.authorityAgents.run(publicId, agentKey, body),
+    mutationFn: (body) => api.robots.authorityAgents.run(publicId, body),
   });
 }

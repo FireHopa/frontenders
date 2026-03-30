@@ -17,7 +17,7 @@ import { useRobot, useUpdateRobot } from "@/hooks/useRobots";
 import { useRobotMessages, useClearRobotMessages } from "@/hooks/useRobotMessages";
 import { useAuthorityEdits } from "@/hooks/useAuthorityEdits";
 import { fileToResizedDataUrl } from "@/lib/image";
-import { transitions } from "@/lib/motion";
+import { fadeUp } from "@/lib/motion";
 import { toastApiError, toastSuccess } from "@/lib/toast";
 
 // Importamos o componente de Uploader
@@ -120,7 +120,7 @@ export function RobotDetailPage() {
 
   const onClearHistory = async () => {
     try {
-      await clear.mutateAsync({ public_id: publicId });
+      await clear.mutateAsync();
       toastSuccess("Histórico limpo.");
     } catch (err) {
       toastApiError(err, "Falha ao limpar histórico");
@@ -176,7 +176,7 @@ export function RobotDetailPage() {
       <motion.div
         initial="hidden"
         animate="show"
-        variants={transitions.page}
+        variants={fadeUp}
         className="mx-auto max-w-6xl px-4 py-8"
       >
         <Card className="shadow-soft">

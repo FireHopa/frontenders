@@ -11,7 +11,6 @@ import JourneyPage from "@/pages/JourneyPage";
 import DashboardPage from "@/pages/DashboardPage";
 import RobotDetailPage from "@/pages/RobotDetailPage";
 import RobotChatPage from "@/pages/RobotChatPage";
-import CompetitionPage from "@/pages/CompetitionPage";
 import BobarPage from "@/pages/BobarPage";
 import MaterialsPage from "@/pages/MaterialsPage";
 import VideoPage from "@/pages/VideoPage";
@@ -51,7 +50,6 @@ export const router = createBrowserRouter([
           { path: "conta", element: <AccountPage /> },
           { path: "robots/:publicId", element: <RobotDetailPage /> },
           { path: "robots/:publicId/chat", element: <RobotChatPage /> },
-          { path: "competition", element: <CompetitionPage /> },
           { path: "projects", element: <BobarPage /> },
           { path: "bobar", element: <BobarPage /> },
           { path: "materials", element: <MaterialsPage /> },

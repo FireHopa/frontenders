@@ -9,16 +9,12 @@ export function ChatComposer({
   onChange,
   onSend,
   onSendAudio,
-  useWeb,
-  onToggleWeb,
   busy,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
   onSendAudio: (file: File) => void | Promise<void>;
-  useWeb: boolean;
-  onToggleWeb: () => void;
   busy?: boolean;
 }) {
   const onKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
@@ -33,16 +29,6 @@ export function ChatComposer({
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">Enter</Badge>
         <span className="text-xs text-muted-foreground">envia • Shift+Enter quebra linha</span>
-
-        <Button
-          type="button"
-          variant={useWeb ? "accent" : "outline"}
-          size="sm"
-          onClick={onToggleWeb}
-          className="ml-auto h-7 px-2 text-xs"
-        >
-          Web {useWeb ? "ON" : "OFF"}
-        </Button>
       </div>
 
       <div className="glass relative rounded-2xl border bg-background/40 shadow-soft">
@@ -59,7 +45,6 @@ export function ChatComposer({
           aria-label="Mensagem"
         />
 
-        {/* actions inside the box */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-end gap-2">
           <AudioRecorderInline disabled={busy} onSend={onSendAudio} />
           <Button variant="accent" onClick={onSend} disabled={busy || !value.trim()} className="h-9">

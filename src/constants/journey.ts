@@ -1,4 +1,4 @@
-import type { JourneyStep } from "@/types/journey";
+import type { BriefingField, JourneyStep } from "@/types/journey";
 
 export const LEVELS = [
   { level: 1, title: "Robô", subtitle: "A Fundação" },
@@ -34,7 +34,7 @@ export const JOURNEY_STEPS: JourneyStep[] = [
   { id: "tiktok", label: "TikTok", helper: "Perfil do TikTok:", placeholder: "@", optional: true, level: 3, accent: "blue" },
 ];
 
-export const DEFAULT_VALUES: Record<string, string> = {
+export const DEFAULT_VALUES: Record<BriefingField, string> = {
   company_name: "", owner_name: "", niche: "", audience: "", offer: "", region: "", tone: "", competitors: "", goals: "",
   real_differentials: "", restrictions: "", reviews: "", testimonials: "", usable_links_texts: "", forbidden_content: "",
   site: "", google_business_profile: "", instagram: "", linkedin: "", youtube: "", tiktok: ""

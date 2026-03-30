@@ -40,63 +40,13 @@ const CORE_GROUPS = [
 ];
 
 const BUSINESS_CORE_PUBLIC_ID = "business-core";
-const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
 
-const LOCAL_CORE_FIELDS = [
-  "company_name",
-  "owner_name",
-  "city_state",
-  "service_area",
-  "main_audience",
-  "services_products",
-  "real_differentials",
-  "restrictions",
-  "reviews",
-  "testimonials",
-  "usable_links_texts",
-  "forbidden_content",
-  "site",
-  "google_business_profile",
-  "instagram",
-  "linkedin",
-  "youtube",
-  "tiktok",
-] as const;
-
-function sanitizeDraftForLocalStorage(input: Record<string, unknown>): Record<string, string> {
+function normalizeDraft(input?: Record<string, unknown> | null): Record<string, string> {
   const next: Record<string, string> = {};
-  LOCAL_CORE_FIELDS.forEach((field) => {
-    const value = input[field];
-    if (value !== undefined && value !== null) {
-      next[field] = String(value);
-    }
+  Object.entries(input || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) next[key] = String(value);
   });
   return next;
-}
-
-function loadLocalDraft(storageKey: string): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? sanitizeDraftForLocalStorage(parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveLocalDraft(storageKey: string, draft: Record<string, unknown>) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(sanitizeDraftForLocalStorage(draft)));
-  } catch (error) {
-    console.warn("Não consegui salvar o núcleo localmente.", error);
-  }
-}
-
-
-function buildScopedStorageKey(userEmail?: string | null): string {
-  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
-  return `${STORAGE_KEY_PREFIX}:${normalized}`;
 }
 
 function getSkyBobDisplayValue(value: string): string {
@@ -112,12 +62,8 @@ function isStructuredSkyBobValue(value: string): boolean {
 export default function AuthorityNucleusPage() {
   const userEmail = useAuthStore((state) => state.user?.email ?? null);
   const authToken = useAuthStore((state) => state.token);
-  const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
-
-  React.useEffect(() => {
-    setDraft(loadLocalDraft(storageKey));
-  }, [storageKey]);
+  const [hasServerSnapshot, setHasServerSnapshot] = React.useState(false);
 
   const { data: coreData, refetch } = useQuery({
     queryKey: ["business-core", BUSINESS_CORE_PUBLIC_ID, userEmail],
@@ -127,16 +73,24 @@ export default function AuthorityNucleusPage() {
 
   React.useEffect(() => {
     if (!coreData) return;
-    setDraft((prev) => ({ ...(coreData as Record<string, string>), ...prev }));
-    saveLocalDraft(storageKey, coreData as Record<string, unknown>);
-  }, [coreData, storageKey]);
+    setDraft((prev) => {
+      if (!hasServerSnapshot) {
+        setHasServerSnapshot(true);
+        return normalizeDraft(coreData as unknown as Record<string, unknown>);
+      }
+      const serverCore = coreData as unknown as Record<string, unknown>;
+      const hasPendingChanges = Object.keys(prev).some((key) => String(prev[key] ?? "") !== String(serverCore[key] ?? ""));
+      if (hasPendingChanges) return prev;
+      return normalizeDraft(coreData as unknown as Record<string, unknown>);
+    });
+  }, [coreData, hasServerSnapshot]);
 
   const saveCore = async () => {
-    saveLocalDraft(storageKey, draft);
     try {
       await api.robots.businessCore.patch(BUSINESS_CORE_PUBLIC_ID, draft as any);
+      await refetch();
     } catch (err) {
-      toastApiError(err, "Salvei localmente, mas não consegui sincronizar no backend");
+      toastApiError(err, "Não consegui salvar o núcleo no backend");
       return;
     }
     toastSuccess("Núcleo da Empresa salvo com sucesso!");

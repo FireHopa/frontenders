@@ -2,7 +2,6 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Particles } from "@/components/effects/Particles";
 import { useNavigate } from "react-router-dom";
-import { useAuthStore } from "@/state/authStore";
 import { JOURNEY_STEPS } from "@/constants/journey";
 import type { BriefingIn } from "@/types/api";
 import type { JourneyStep, Achievement } from "@/types/journey";
@@ -18,15 +17,9 @@ import { Sparkles } from "@/components/journey/Sparkles";
 import { ConfettiBurst } from "@/components/effects/ConfettiBurst";
 import { transitions, fadeUp } from "@/lib/motion";
 import { useCreateRobot } from "@/hooks/useRobots";
+import { api } from "@/services/robots";
 import { toastApiError, toastSuccess } from "@/lib/toast";
 import { CheckCircle2, Trophy, Timer, Star, Eye, EyeOff, Bot, Sparkles as SparkleIcon } from "lucide-react";
-
-const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
-
-function buildScopedStorageKey(userEmail?: string | null): string {
-  const normalized = String(userEmail || "anon").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "_");
-  return `${STORAGE_KEY_PREFIX}:${normalized}`;
-}
 
 const TONE_OPTIONS = [
   { id: "simples", label: "Simples" },
@@ -105,8 +98,6 @@ function coachHint(stepId: string) {
 }
 
 export function JourneyWizard() {
-  const userEmail = useAuthStore((state) => state.user?.email ?? null);
-  const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
   const [state, dispatch] = React.useReducer(journeyReducer, undefined, initialJourneyState);
   const navigate = useNavigate();
   const createRobot = useCreateRobot();
@@ -221,7 +212,7 @@ export function JourneyWizard() {
       tiktok: state.values.tiktok?.trim() || "",
     };
 
-    // 2. ALIMENTAÇÃO DO NÚCLEO GLOBAL NO LOCALSTORAGE
+    // 2. ALIMENTAÇÃO DO NÚCLEO GLOBAL NO BACKEND
     const corePayload = {
       company_name: state.values.company_name?.trim() || "",
       owner_name: state.values.owner_name?.trim() || "",
@@ -241,10 +232,9 @@ export function JourneyWizard() {
       youtube: state.values.youtube?.trim() || "",
       tiktok: state.values.tiktok?.trim() || "",
     };
-    localStorage.setItem(storageKey, JSON.stringify(corePayload));
-
     try {
       const created = await createRobot.mutateAsync(briefingPayload);
+      await api.robots.businessCore.patch("business-core", corePayload);
       toastSuccess("Inteligência e Robô criados com sucesso!");
       setConfetti(true);
       window.setTimeout(() => setConfetti(false), 950);
@@ -378,7 +368,7 @@ export function JourneyWizard() {
         </div>
 
         <div className="space-y-6">
-          <RobotPreviewPanel values={state.values as unknown as BriefingIn} stepIndex={state.stepIndex} />
+          <RobotPreviewPanel values={state.values as Record<string, string>} stepIndex={state.stepIndex} />
           <Card variant="glass">
             <CardContent className="p-5 space-y-3">
               <div className="text-sm font-semibold">Progresso Estratégico</div>
