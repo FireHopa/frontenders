@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { appendImageHistory } from "@/lib/imageHistory";
+import { extractResponseErrorMessage, syncCreditsFromResponse } from "@/lib/credits";
 import { API_BASE_URL } from "@/constants/app";
 import {
   Wand2,
@@ -240,8 +241,10 @@ export default function ImageGenerationFromScratch({ onBack }: Props) {
         }),
       });
 
+      syncCreditsFromResponse(response);
+
       if (!response.ok) {
-        throw new Error(response.status === 401 ? "Sessão expirada." : `Erro ${response.status}`);
+        throw new Error(await extractResponseErrorMessage(response));
       }
 
       const reader = response.body?.getReader();

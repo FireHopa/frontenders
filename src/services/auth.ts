@@ -1,3 +1,4 @@
+import type { CreditCatalogResponse } from "@/lib/credits";
 import { http } from "./http";
 
 export interface TokenResponse {
@@ -21,6 +22,17 @@ export interface TokenResponse {
   has_google_business_profile?: boolean;
   google_business_account_display_name?: string | null;
   google_business_location_title?: string | null;
+}
+
+export interface CreditPlanActivationResponse {
+  ok: boolean;
+  plan_id: string;
+  title: string;
+  display_price: string;
+  credits_added: number;
+  base_credits: number;
+  bonus_credits: number;
+  credits: number;
 }
 
 export const authService = {
@@ -68,6 +80,19 @@ export const authService = {
       google_business_location_title?: string | null;
     }>("/api/auth/me", {
       method: "GET",
+    });
+  },
+
+  getCreditsCatalog: async () => {
+    return http<CreditCatalogResponse>("/api/auth/credits/catalog", {
+      method: "GET",
+    });
+  },
+
+  activateCreditPlan: async (planId: string) => {
+    return http<CreditPlanActivationResponse>("/api/auth/credits/activate-plan", {
+      method: "POST",
+      json: { plan_id: planId },
     });
   },
 };

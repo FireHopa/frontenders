@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Building2,
@@ -20,8 +20,24 @@ import { facebookService } from "@/services/facebook";
 import { youtubeService } from "@/services/youtube";
 import { googleBusinessProfileService } from "@/services/googleBusinessProfile";
 import { tiktokService } from "@/services/tiktok";
+import { authService } from "@/services/auth";
 import { toastApiError, toastSuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import {
+  CREDIT_ACTIONS,
+  CREDIT_PLANS,
+  DEFAULT_CREDIT_CATALOG,
+  DEFAULT_DAILY_FREE_CREDITS,
+  formatCredits,
+  type CreditCatalogResponse,
+} from "@/lib/credits";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 async function sha256Base64Url(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -148,7 +164,7 @@ function ActionButton({
 }
 
 export default function AccountPage() {
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, updateCredits } = useAuthStore();
   const [isLinking, setIsLinking] = useState(false);
   const [isDisconnectingInstagram, setIsDisconnectingInstagram] = useState(false);
   const [isDisconnectingFacebook, setIsDisconnectingFacebook] = useState(false);
@@ -159,6 +175,57 @@ export default function AccountPage() {
   const [isDisconnectingTikTok, setIsDisconnectingTikTok] = useState(false);
   const [isLinkingGoogleBusiness, setIsLinkingGoogleBusiness] = useState(false);
   const [isDisconnectingGoogleBusiness, setIsDisconnectingGoogleBusiness] = useState(false);
+  const [isCreditsDialogOpen, setIsCreditsDialogOpen] = useState(false);
+  const [isLoadingCreditCatalog, setIsLoadingCreditCatalog] = useState(false);
+  const [activatingPlanId, setActivatingPlanId] = useState<string | null>(null);
+  const [creditCatalog, setCreditCatalog] = useState<CreditCatalogResponse>({
+    ...DEFAULT_CREDIT_CATALOG,
+    current_credits: user?.credits ?? DEFAULT_CREDIT_CATALOG.current_credits,
+  });
+
+  useEffect(() => {
+    setCreditCatalog((current) => ({
+      ...current,
+      current_credits: user?.credits ?? current.current_credits,
+    }));
+  }, [user?.credits]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCreditCatalog() {
+      try {
+        setIsLoadingCreditCatalog(true);
+        const catalog = await authService.getCreditsCatalog();
+        if (cancelled) return;
+        updateCredits(catalog.current_credits);
+        setCreditCatalog({
+          ...catalog,
+          current_credits: catalog.current_credits,
+          plans: catalog.plans?.length ? catalog.plans : CREDIT_PLANS,
+          actions: catalog.actions?.length ? catalog.actions : CREDIT_ACTIONS,
+        });
+      } catch {
+        if (cancelled) return;
+        setCreditCatalog((current) => ({
+          ...current,
+          current_credits: user?.credits ?? current.current_credits,
+          plans: current.plans?.length ? current.plans : CREDIT_PLANS,
+          actions: current.actions?.length ? current.actions : CREDIT_ACTIONS,
+        }));
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCreditCatalog(false);
+        }
+      }
+    }
+
+    void loadCreditCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.credits]);
 
   if (!user) return <div className="p-8">Não autenticado.</div>;
 
@@ -534,6 +601,48 @@ export default function AccountPage() {
     ],
   );
 
+  const creditActionsByCategory = useMemo(() => {
+    return (creditCatalog.actions?.length ? creditCatalog.actions : CREDIT_ACTIONS).reduce<
+      Record<string, CreditCatalogResponse["actions"]>
+    >((acc, action) => {
+      if (!acc[action.category]) {
+        acc[action.category] = [];
+      }
+      acc[action.category].push(action);
+      return acc;
+    }, {});
+  }, [creditCatalog.actions]);
+
+  const availablePlans = creditCatalog.plans?.length ? creditCatalog.plans : CREDIT_PLANS;
+  const dailyFreeCredits = creditCatalog.daily_free_credits || DEFAULT_DAILY_FREE_CREDITS;
+
+  const handleActivateCreditPlan = async (planId: string) => {
+    if (activatingPlanId) return;
+
+    try {
+      setActivatingPlanId(planId);
+      const response = await authService.activateCreditPlan(planId);
+      updateUser({ credits: response.credits });
+      setCreditCatalog((current) => ({
+        ...current,
+        current_credits: response.credits,
+      }));
+      const bonusSuffix =
+        response.bonus_credits > 0
+          ? ` (${formatCredits(response.base_credits)} base + ${formatCredits(response.bonus_credits)} bônus)`
+          : "";
+      toastSuccess(
+        `Plano ${response.title} ativado: +${formatCredits(response.credits_added)} créditos${bonusSuffix}.`
+      );
+      setIsCreditsDialogOpen(false);
+    } catch (error) {
+      toastApiError(error, "Erro ao adicionar créditos");
+    } finally {
+      setActivatingPlanId(null);
+    }
+  };
+
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="space-y-8 animate-in fade-in duration-500">
@@ -585,7 +694,8 @@ export default function AccountPage() {
                 </div>
                 <h3 className="text-xl font-semibold text-white">Créditos de IA</h3>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-white/60">
-                  Seus créditos são usados para executar agentes de autoridade. Você recebe <span className="font-semibold text-white">100 novos créditos</span> automaticamente todos os dias.
+                  Seus créditos agora cobrem agentes de chat, SkyBob, análises, motor de imagem e fluxos de autoridade. Você recebe{" "}
+                  <span className="font-semibold text-white">{formatCredits(dailyFreeCredits)} créditos</span> diariamente sem perder saldo acumulado.
                 </p>
               </div>
               <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300">
@@ -596,8 +706,38 @@ export default function AccountPage() {
             <div className="relative mt-6 rounded-[24px] border border-white/10 bg-black/20 p-5 transition-all duration-300 hover:bg-black/25">
               <p className="text-xs uppercase tracking-[0.24em] text-white/35">Disponível agora</p>
               <div className="mt-3 flex items-end justify-between gap-4">
-                <p className="text-5xl font-semibold leading-none text-white">{user.credits}</p>
-                <p className="text-right text-sm leading-6 text-white/50">Uso contínuo para agentes, fluxos e tarefas do painel.</p>
+                <p className="text-5xl font-semibold leading-none text-white">{formatCredits(user.credits)}</p>
+                <p className="text-right text-sm leading-6 text-white/50">Uso contínuo para agentes, fluxos, imagem, SkyBob e tarefas do painel.</p>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Carga diária</p>
+                  <p className="mt-2 text-lg font-semibold text-white">+{formatCredits(dailyFreeCredits)}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Plano inicial</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{formatCredits(creditCatalog.initial_credits)}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Plano recomendado</p>
+                  <p className="mt-2 text-lg font-semibold text-white">
+                    {availablePlans.find((plan) => plan.recommended)?.title || "Growth Stack"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setIsCreditsDialogOpen(true)}
+                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:scale-[1.01] hover:bg-white/90"
+                >
+                  Adicionar créditos
+                </button>
+                <div className="flex-1 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+                  Compra fictícia liberada neste patch: escolhe o plano, confirma e os créditos entram imediatamente.
+                </div>
               </div>
             </div>
           </section>
@@ -619,6 +759,154 @@ export default function AccountPage() {
             ))}
           </div>
         </section>
+
+        <Dialog open={isCreditsDialogOpen} onOpenChange={setIsCreditsDialogOpen}>
+          <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto border-white/10 bg-[#07111f] p-0">
+            <div className="relative overflow-hidden rounded-[2rem]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_28%),radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_32%)]" />
+              <div className="relative p-6 sm:p-8">
+                <DialogHeader className="pr-10">
+                  <DialogTitle>Adicionar créditos</DialogTitle>
+                  <DialogDescription>
+                    Planos fictícios prontos para teste. Ao clicar, os créditos entram imediatamente na conta e o saldo permanece acumulado.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="mt-6 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {availablePlans.map((plan) => {
+                        const isActivating = activatingPlanId === plan.id;
+                        return (
+                          <div
+                            key={plan.id}
+                            className={cn(
+                              "rounded-[28px] border p-5 transition-all duration-200",
+                              plan.recommended
+                                ? "border-cyan-400/30 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.08)]"
+                                : "border-white/10 bg-white/[0.03]"
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-lg font-semibold text-white">{plan.title}</h3>
+                                  {plan.badge ? (
+                                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-300">
+                                      {plan.badge}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-white/60">{plan.description}</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-right">
+                                <p className="text-xs uppercase tracking-[0.18em] text-white/35">Valor fictício</p>
+                                <p className="mt-1 text-lg font-semibold text-white">{plan.display_price}</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-5 grid grid-cols-3 gap-3">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Base</p>
+                                <p className="mt-2 text-base font-semibold text-white">{formatCredits(plan.base_credits)}</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Bônus</p>
+                                <p className="mt-2 text-base font-semibold text-emerald-300">+{formatCredits(plan.bonus_credits)}</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Total</p>
+                                <p className="mt-2 text-base font-semibold text-white">{formatCredits(plan.total_credits)}</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 flex items-center justify-between gap-3">
+                              <div className="text-sm text-white/55">{plan.monthly_fit}</div>
+                              <button
+                                type="button"
+                                onClick={() => handleActivateCreditPlan(plan.id)}
+                                disabled={Boolean(activatingPlanId)}
+                                className={cn(
+                                  "inline-flex h-11 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+                                  plan.recommended
+                                    ? "bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                                    : "bg-white text-slate-950 hover:bg-white/90"
+                                )}
+                              >
+                                {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ativar plano"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">Resumo operacional</h3>
+                          <p className="mt-1 text-sm leading-6 text-white/60">
+                            Referência rápida para manter o custo previsível no uso diário.
+                          </p>
+                        </div>
+                        {isLoadingCreditCatalog ? <Loader2 className="h-5 w-5 animate-spin text-white/50" /> : null}
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Saldo atual</p>
+                          <p className="mt-2 text-2xl font-semibold text-white">{formatCredits(user.credits)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Recarga automática diária</p>
+                          <p className="mt-2 text-2xl font-semibold text-emerald-300">+{formatCredits(dailyFreeCredits)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Tabela de consumo</h3>
+                        <p className="mt-1 text-sm leading-6 text-white/60">
+                          Cada execução válida consome créditos no backend, sem depender da interface.
+                        </p>
+                      </div>
+                      {isLoadingCreditCatalog ? <Loader2 className="h-5 w-5 animate-spin text-white/50" /> : null}
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                      {Object.entries(creditActionsByCategory).map(([category, actions]) => (
+                        <div key={category} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">{category}</h4>
+                            <span className="text-xs text-white/35">{actions.length} itens</span>
+                          </div>
+
+                          <div className="space-y-3">
+                            {actions.map((action) => (
+                              <div key={action.key} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-white">{action.title}</p>
+                                  <p className="mt-1 text-xs leading-5 text-white/45">{action.description}</p>
+                                </div>
+                                <div className="shrink-0 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-sm font-semibold text-cyan-300">
+                                  {formatCredits(action.credits)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   );

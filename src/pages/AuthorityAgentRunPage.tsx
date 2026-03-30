@@ -41,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toastSuccess, toastApiError } from "@/lib/toast";
 import { useAuthStore } from "@/state/authStore";
+import { CREDIT_ACTION_COSTS, formatCredits } from "@/lib/credits";
 import { PublishModal } from "@/components/linkedin/PublishModal";
 import { InstagramPublishModal, type InstagramPublishValues } from "@/components/instagram/InstagramPublishModal";
 import { FacebookPublishModal, type FacebookPublishValues } from "@/components/facebook/FacebookPublishModal";
@@ -429,7 +430,7 @@ export default function AuthorityAgentRunPage() {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [isSendingToBobar, setIsSendingToBobar] = useState(false);
 
-  const { user, deductCredits } = useAuthStore();
+  const { user } = useAuthStore();
   const agent = AUTHORITY_AGENTS.find((a) => a.key === agentKey);
   const { data: businessCore } = useQuery({
     queryKey: ["business-core", "authority-agent-run", user?.email],
@@ -468,8 +469,8 @@ export default function AuthorityAgentRunPage() {
 
   async function handleOpenTask(task?: AuthorityTask) {
     if (!agentKey) return;
-    if (!user || user.credits < 5) {
-      toastApiError(new Error("Precisas de pelo menos 5 créditos para executar esta ação."), "Créditos Insuficientes");
+    if (!user || user.credits < CREDIT_ACTION_COSTS.authority_agent_run) {
+      toastApiError(new Error(`Precisas de pelo menos ${formatCredits(CREDIT_ACTION_COSTS.authority_agent_run)} créditos para executar esta ação.`), "Créditos Insuficientes");
       return;
     }
 
@@ -515,6 +516,15 @@ export default function AuthorityAgentRunPage() {
 
   async function requestVideoFormatRecommendation(theme: string) {
     if (!agentKey || !theme.trim()) return null;
+    if (!user || user.credits < CREDIT_ACTION_COSTS.authority_agent_video_format_suggestion) {
+      toastApiError(
+        new Error(
+          `Precisas de pelo menos ${formatCredits(CREDIT_ACTION_COSTS.authority_agent_video_format_suggestion)} créditos para analisar o melhor formato.`
+        ),
+        "Créditos Insuficientes"
+      );
+      return null;
+    }
 
     setIsAnalyzingVideoFormat(true);
     try {
@@ -544,8 +554,8 @@ export default function AuthorityAgentRunPage() {
 
   async function handleGenerateThemesWithIA() {
     if (!agentKey || !themeModalTask) return;
-    if (!user || user.credits < 2) {
-      toastApiError(new Error("Precisas de pelo menos 2 créditos para gerar sugestões de temas."), "Créditos Insuficientes");
+    if (!user || user.credits < CREDIT_ACTION_COSTS.authority_agent_theme_suggestion) {
+      toastApiError(new Error(`Precisas de pelo menos ${formatCredits(CREDIT_ACTION_COSTS.authority_agent_theme_suggestion)} créditos para gerar sugestões de temas.`), "Créditos Insuficientes");
       return;
     }
 
@@ -557,7 +567,6 @@ export default function AuthorityAgentRunPage() {
         task: themeModalTask?.prompt || themeModalTask?.title || "",
         nucleus: { ...rawNucleus },
       });
-      deductCredits(2);
       setSuggestedThemes(res.themes || []);
       toastSuccess("Temas gerados com sucesso!");
     } catch (e: any) {
@@ -619,7 +628,6 @@ export default function AuthorityAgentRunPage() {
       };
 
       const data = await api.authorityAgents.runGlobal(payload);
-      deductCredits(5);
       setResult(data);
       toastSuccess("Tarefa concluída com sucesso!");
     } catch (e: any) {
@@ -980,7 +988,7 @@ export default function AuthorityAgentRunPage() {
   }
 
   if (!agent) return <div className="p-8">Agente não encontrado.</div>;
-  const hasEnoughCredits = !!user && user.credits >= 5;
+  const hasEnoughCredits = !!user && user.credits >= CREDIT_ACTION_COSTS.authority_agent_run;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 space-y-8 relative">
@@ -1115,7 +1123,7 @@ export default function AuthorityAgentRunPage() {
               </div>
             )}
           </div>
-          {!hasEnoughCredits && <p className="text-sm text-red-500 text-center mt-4 bg-red-500/10 py-3 rounded-xl">Não tens créditos suficientes para executar os agentes hoje.</p>}
+          {!hasEnoughCredits && <p className="text-sm text-red-500 text-center mt-4 bg-red-500/10 py-3 rounded-xl">Não tens créditos suficientes para executar os agentes de autoridade hoje.</p>}
         </div>
       )}
 

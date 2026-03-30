@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/constants/app";
+import { syncCreditsFromResponse } from "@/lib/credits";
 
 export class HttpError extends Error {
   status: number;
@@ -53,6 +54,8 @@ export async function http<T>(path: string, init: RequestInitWithJson = {}): Pro
     headers,
     body: init.json !== undefined ? JSON.stringify(init.json) : init.body,
   });
+
+  syncCreditsFromResponse(res);
 
   if (!res.ok) {
     const payload = await parseJsonSafe(res);

@@ -33,6 +33,7 @@ import { API_BASE_URL } from "@/constants/app";
 import { appendImageHistory, downloadImage } from "@/lib/imageHistory";
 import { dataUrlToFile, readImageDimensionsFromUrl } from "@/lib/image";
 import { cn } from "@/lib/utils";
+import { extractResponseErrorMessage, syncCreditsFromResponse } from "@/lib/credits";
 
 type ImageResult = {
   engine_id: string;
@@ -1589,8 +1590,10 @@ const handleSelectProject = useCallback(
           signal: controller.signal,
         });
 
+        syncCreditsFromResponse(response);
+
         if (!response.ok) {
-          throw new Error(response.status === 401 ? "Sessão expirada." : `Erro ${response.status}`);
+          throw new Error(await extractResponseErrorMessage(response));
         }
 
         const reader = response.body?.getReader();

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/state/authStore";
+import { DEFAULT_DAILY_FREE_CREDITS, formatCredits } from "@/lib/credits";
 
 export function AppTopBar() {
   const { user, token, logout } = useAuthStore();
@@ -30,9 +31,9 @@ export function AppTopBar() {
           <div className="flex items-center gap-2 sm:gap-4">
             
             {/* Tag de Créditos */}
-            <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-400 border border-blue-500/20" title="Recarrega 100 créditos diariamente">
+            <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-400 border border-blue-500/20" title={`Recebe ${formatCredits(DEFAULT_DAILY_FREE_CREDITS)} créditos diários automaticamente`}>
               <span>🪙</span>
-              <span>{user.credits ?? 0} Créditos</span>
+              <span>{formatCredits(user.credits ?? 0)} Créditos</span>
             </div>
 
             {/* Link clicável para a página "Minha Conta" */}

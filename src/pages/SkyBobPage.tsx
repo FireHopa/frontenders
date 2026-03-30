@@ -102,6 +102,41 @@ function countFilledNucleusFields(nucleus: Record<string, unknown>): number {
   }).length;
 }
 
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+type FlightWaypoint = {
+  progress: number;
+  x: number;
+  rotate: number;
+};
+
+function interpolateFlightValue(
+  progress: number,
+  waypoints: FlightWaypoint[],
+  key: "x" | "rotate"
+): number {
+  if (!waypoints.length) return 0;
+  if (progress <= waypoints[0].progress) return waypoints[0][key];
+  if (progress >= waypoints[waypoints.length - 1].progress) return waypoints[waypoints.length - 1][key];
+
+  for (let index = 1; index < waypoints.length; index += 1) {
+    const previous = waypoints[index - 1];
+    const current = waypoints[index];
+
+    if (progress <= current.progress) {
+      const range = current.progress - previous.progress || 1;
+      const ratio = (progress - previous.progress) / range;
+      return previous[key] + (current[key] - previous[key]) * ratio;
+    }
+  }
+
+  return waypoints[waypoints.length - 1][key];
+}
+
+
 function TabButton({
   active,
   onClick,
@@ -279,6 +314,7 @@ function RocketMark() {
   );
 }
 
+
 function SpaceRunCard({
   progress,
   label,
@@ -290,28 +326,86 @@ function SpaceRunCard({
   title: string;
   description: string;
 }) {
-  const normalizedProgress = Math.max(3, Math.min(progress, 100));
-  const rocketTravel = normalizedProgress * 0.7;
-  const stars = React.useMemo(
+  const normalizedProgress = clamp(progress, 0, 100);
+  const progressRatio = normalizedProgress / 100;
+  const rocketBottom = 4 + progressRatio * 78;
+
+  const flightPath = React.useMemo<FlightWaypoint[]>(
+    () => [
+      { progress: 0, x: 0, rotate: -4 },
+      { progress: 10, x: -10, rotate: -8 },
+      { progress: 18, x: -26, rotate: -12 },
+      { progress: 28, x: -8, rotate: -4 },
+      { progress: 38, x: 24, rotate: 10 },
+      { progress: 48, x: 30, rotate: 12 },
+      { progress: 58, x: 8, rotate: 4 },
+      { progress: 68, x: -22, rotate: -9 },
+      { progress: 78, x: -32, rotate: -12 },
+      { progress: 88, x: 16, rotate: 7 },
+      { progress: 100, x: 0, rotate: 0 },
+    ],
+    []
+  );
+
+  const rocketX = interpolateFlightValue(normalizedProgress, flightPath, "x");
+  const rocketRotate = interpolateFlightValue(normalizedProgress, flightPath, "rotate");
+
+  const deepStars = React.useMemo(
     () =>
-      Array.from({ length: 56 }, (_, index) => ({
-        id: index,
-        left: `${(index * 11.7) % 100}%`,
-        top: `${(index * 7.9) % 100}%`,
-        scale: 0.6 + ((index % 5) * 0.22),
-        delay: (index % 8) * 0.18,
+      Array.from({ length: 42 }, (_, index) => ({
+        id: `deep-${index}`,
+        left: `${(index * 13.7 + (index % 4) * 6.5) % 100}%`,
+        top: `${(index * 17.9) % 100}%`,
+        size: 1 + (index % 3) * 0.7,
+        duration: 12 + (index % 6) * 1.6,
+        delay: index * 0.23,
+        opacity: 0.35 + (index % 5) * 0.1,
       })),
     []
   );
 
-  const contrails = React.useMemo(
+  const nearStars = React.useMemo(
     () =>
-      Array.from({ length: 6 }, (_, index) => ({
-        id: index,
-        left: `${14 + index * 13}%`,
-        delay: index * 0.15,
-        duration: 1.4 + index * 0.18,
+      Array.from({ length: 18 }, (_, index) => ({
+        id: `near-${index}`,
+        left: `${(index * 19.4 + 8) % 100}%`,
+        top: `${(index * 14.2 + 11) % 100}%`,
+        width: 12 + (index % 4) * 10,
+        duration: 4.8 + (index % 5) * 0.55,
+        delay: index * 0.28,
+        opacity: 0.18 + (index % 4) * 0.08,
       })),
+    []
+  );
+
+  const cosmicDust = React.useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, index) => ({
+        id: `dust-${index}`,
+        left: `${(index * 21.5 + 3) % 100}%`,
+        top: `${(index * 18.8 + 7) % 100}%`,
+        size: 42 + (index % 3) * 22,
+        duration: 10 + (index % 4) * 1.4,
+        delay: index * 0.38,
+      })),
+    []
+  );
+
+  const meteors = React.useMemo(
+    () => [
+      { id: "meteor-1", top: "72%", left: "24%", size: 56, duration: 5.8, delay: 0.2, driftX: 210, driftY: 150, rotate: -20 },
+      { id: "meteor-2", top: "56%", left: "70%", size: 72, duration: 6.6, delay: 1.1, driftX: -240, driftY: 180, rotate: 18 },
+      { id: "meteor-3", top: "36%", left: "28%", size: 48, duration: 5.4, delay: 2.3, driftX: 220, driftY: 170, rotate: -16 },
+      { id: "meteor-4", top: "18%", left: "68%", size: 64, duration: 6.2, delay: 0.9, driftX: -220, driftY: 155, rotate: 14 },
+    ],
+    []
+  );
+
+  const blackHoles = React.useMemo(
+    () => [
+      { id: "hole-1", top: "18%", left: "14%", size: 120, glow: "rgba(56,189,248,0.18)" },
+      { id: "hole-2", top: "62%", left: "72%", size: 148, glow: "rgba(168,85,247,0.18)" },
+    ],
     []
   );
 
@@ -329,32 +423,7 @@ function SpaceRunCard({
   return (
     <div className="relative isolate min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.16),transparent_28%),linear-gradient(180deg,#03060F_0%,#050914_45%,#07101D_100%)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(77,232,255,0.18),transparent_24%),radial-gradient(circle_at_20%_80%,rgba(59,130,246,0.14),transparent_30%),radial-gradient(circle_at_80%_72%,rgba(168,85,247,0.12),transparent_26%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:42px_42px] opacity-40" />
-
-      {stars.map((star) => (
-        <motion.span
-          key={star.id}
-          className="absolute rounded-full bg-white/90"
-          style={{ left: star.left, top: star.top, width: 2.3 * star.scale, height: 2.3 * star.scale }}
-          animate={{ opacity: [0.15, 0.95, 0.25], scale: [1, 1.35, 1] }}
-          transition={{ duration: 1.8, repeat: Infinity, delay: star.delay, ease: "easeInOut" }}
-        />
-      ))}
-
-      {contrails.map((line, index) => (
-        <motion.div
-          key={line.id}
-          className="absolute top-[18%] h-px w-40 bg-[linear-gradient(90deg,transparent,rgba(77,232,255,0.5),transparent)]"
-          style={{ left: line.left }}
-          animate={{ x: [-120, 820], opacity: [0, 0.8, 0] }}
-          transition={{ duration: line.duration, repeat: Infinity, delay: line.delay, ease: "linear" }}
-        >
-          <div
-            className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-200 blur-[2px]"
-            style={{ opacity: index % 2 === 0 ? 0.9 : 0.6 }}
-          />
-        </motion.div>
-      ))}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:42px_42px] opacity-30" />
 
       <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[1600px] flex-col px-5 pb-8 pt-24 sm:px-8 lg:px-12">
         <div className="grid flex-1 gap-10 xl:grid-cols-[0.94fr_1.06fr] xl:items-center">
@@ -379,12 +448,12 @@ function SpaceRunCard({
                 <motion.div
                   className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,#00C8E8,#4DE8FF)] shadow-[0_0_36px_rgba(77,232,255,0.55)]"
                   animate={{ width: `${normalizedProgress}%` }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  transition={{ duration: 0.45, ease: "easeOut" }}
                 />
                 <motion.div
                   className="absolute inset-y-[2px] w-20 rounded-full bg-white/35 blur-md"
                   animate={{ left: `calc(${normalizedProgress}% - 2.5rem)` }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  transition={{ duration: 0.45, ease: "easeOut" }}
                 />
               </div>
 
@@ -410,65 +479,168 @@ function SpaceRunCard({
             </div>
 
             <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.24em] text-cyan-200/90">
-              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2">Tela cheia ativa</span>
-              <span className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2">Progresso real da missão</span>
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2">Subida guiada pelo progresso</span>
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2">Desvio visual de obstáculos</span>
             </div>
           </div>
 
-          <div className="relative flex min-h-[560px] items-end justify-center overflow-hidden rounded-[40px] border border-white/10 bg-[radial-gradient(circle_at_50%_15%,rgba(77,232,255,0.18),transparent_30%),linear-gradient(180deg,rgba(4,8,16,0.94),rgba(5,9,18,0.98))] p-6 shadow-[0_24px_100px_rgba(0,0,0,0.45)]">
-            <motion.div
-              className="absolute left-[16%] top-[12%] h-28 w-28 rounded-full bg-cyan-300/8 blur-3xl"
-              animate={{ opacity: [0.45, 0.9, 0.45], scale: [0.92, 1.12, 0.92] }}
-              transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.div
-              className="absolute right-[12%] top-[24%] h-24 w-24 rounded-full bg-fuchsia-400/8 blur-3xl"
-              animate={{ opacity: [0.3, 0.75, 0.3], scale: [1, 1.18, 1] }}
-              transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
-            />
+          <div className="relative flex min-h-[620px] items-end justify-center overflow-hidden rounded-[40px] border border-white/10 bg-[linear-gradient(180deg,rgba(4,8,16,0.98),rgba(5,9,18,1))] p-6 shadow-[0_24px_100px_rgba(0,0,0,0.45)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(77,232,255,0.16),transparent_24%),radial-gradient(circle_at_18%_70%,rgba(37,99,235,0.12),transparent_32%),radial-gradient(circle_at_84%_34%,rgba(168,85,247,0.14),transparent_26%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),transparent_14%,transparent_86%,rgba(255,255,255,0.03))]" />
 
-            <div className="absolute inset-x-0 bottom-0 h-[42%] bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.22),rgba(0,0,0,0.55))]" />
+            {cosmicDust.map((cloud) => (
+              <motion.div
+                key={cloud.id}
+                className="absolute rounded-full bg-cyan-300/10 blur-3xl"
+                style={{ left: cloud.left, top: cloud.top, width: cloud.size, height: cloud.size }}
+                animate={{ y: [0, 30, 0], x: [0, -18, 0], opacity: [0.18, 0.42, 0.18], scale: [0.92, 1.08, 0.92] }}
+                transition={{ duration: cloud.duration, repeat: Infinity, delay: cloud.delay, ease: "easeInOut" }}
+              />
+            ))}
 
-            <motion.div
-              className="absolute bottom-[-6%] left-1/2 z-20"
-              animate={{ y: `-${rocketTravel}vh`, x: ["-50%", "-49.2%", "-50.8%", "-50%"], rotate: [-8, -3, 4, 0] }}
-              transition={{
-                y: { duration: 0.42, ease: "easeOut" },
-                x: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
-                rotate: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
-              }}
-            >
-              <div className="relative flex flex-col items-center">
+            {deepStars.map((star) => (
+              <motion.span
+                key={star.id}
+                className="absolute rounded-full bg-white"
+                style={{ left: star.left, top: star.top, width: star.size, height: star.size, opacity: star.opacity }}
+                animate={{ y: [0, 220, 0], opacity: [star.opacity * 0.7, star.opacity, star.opacity * 0.5], scale: [1, 1.18, 1] }}
+                transition={{ duration: star.duration, repeat: Infinity, delay: star.delay, ease: "linear" }}
+              />
+            ))}
+
+            {nearStars.map((streak) => (
+              <motion.div
+                key={streak.id}
+                className="absolute h-px rounded-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.92),rgba(77,232,255,0.45),transparent)]"
+                style={{ left: streak.left, top: streak.top, width: streak.width, opacity: streak.opacity }}
+                animate={{ y: [0, 300], x: [0, -24], opacity: [0, streak.opacity, 0] }}
+                transition={{ duration: streak.duration, repeat: Infinity, delay: streak.delay, ease: "linear" }}
+              />
+            ))}
+
+            {blackHoles.map((hole) => (
+              <div
+                key={hole.id}
+                className="absolute"
+                style={{ left: hole.left, top: hole.top, width: hole.size, height: hole.size }}
+              >
                 <motion.div
-                  className="absolute top-[92%] h-40 w-20 rounded-full bg-cyan-300/30 blur-3xl"
-                  animate={{ scaleY: [0.85, 1.25, 0.92], opacity: [0.35, 0.9, 0.4] }}
-                  transition={{ duration: 0.7, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background:
+                      "radial-gradient(circle at 50% 50%, rgba(2,6,23,0.98) 0%, rgba(2,6,23,0.98) 24%, rgba(15,23,42,0.92) 36%, rgba(56,189,248,0.14) 53%, rgba(168,85,247,0.08) 66%, transparent 76%)",
+                    boxShadow: `0 0 60px ${hole.glow}`,
+                  }}
+                  animate={{ scale: [0.98, 1.04, 0.98], opacity: [0.8, 1, 0.8] }}
+                  transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut" }}
                 />
                 <motion.div
-                  className="absolute top-[84%] h-36 w-12 rounded-full bg-orange-300/40 blur-2xl"
-                  animate={{ scaleY: [0.8, 1.18, 0.85], opacity: [0.4, 0.95, 0.45] }}
-                  transition={{ duration: 0.52, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute -inset-5 rounded-full border border-cyan-300/10 blur-[1px]"
+                  style={{
+                    background:
+                      "conic-gradient(from 0deg, rgba(77,232,255,0.16), rgba(168,85,247,0.08), rgba(77,232,255,0.16), rgba(168,85,247,0.08), rgba(77,232,255,0.16))",
+                  }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
                 />
+              </div>
+            ))}
 
-                {Array.from({ length: 7 }).map((_, index) => (
-                  <motion.span
-                    key={index}
-                    className="absolute top-[88%] h-4 w-4 rounded-full bg-cyan-200/60"
-                    style={{ left: `${18 + index * 9}%` }}
-                    animate={{ y: [0, 60 + index * 10], opacity: [0.85, 0], scale: [1, 0.2] }}
-                    transition={{ duration: 0.9 + index * 0.05, repeat: Infinity, delay: index * 0.08, ease: "easeOut" }}
+            <div className="absolute inset-x-0 bottom-0 h-[32%] bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.12),rgba(0,0,0,0.55))]" />
+            <div className="absolute bottom-[6%] left-1/2 h-[84%] w-px -translate-x-1/2 bg-[linear-gradient(180deg,rgba(77,232,255,0.06),rgba(77,232,255,0.3),rgba(77,232,255,0.06))]" />
+
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div
+                key={`altitude-${index}`}
+                className="absolute left-1/2 h-px w-24 -translate-x-1/2 bg-[linear-gradient(90deg,transparent,rgba(77,232,255,0.18),transparent)]"
+                style={{ bottom: `${12 + index * 17}%` }}
+              />
+            ))}
+
+            {meteors.map((meteor) => (
+              <motion.div
+                key={meteor.id}
+                className="absolute z-10"
+                style={{ left: meteor.left, top: meteor.top }}
+                animate={{
+                  x: [0, meteor.driftX],
+                  y: [0, meteor.driftY],
+                  rotate: [meteor.rotate, meteor.rotate],
+                  opacity: [0, 1, 1, 0],
+                }}
+
+                transition={{
+                  duration: meteor.duration,
+                  repeat: Infinity,
+                  delay: meteor.delay,
+                  ease: "linear",
+                  repeatDelay: 0.8,
+                }}
+              >
+                <div className="relative">
+                  <div
+                    className="absolute left-1/2 top-1/2 h-2 rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.8),rgba(77,232,255,0.22),transparent)] blur-[1px]"
+                    style={{ width: meteor.size * 2.8, transform: "translate(-100%, -50%)" }}
                   />
-                ))}
-
-                <div className="relative h-[220px] w-[150px]">
-                  <div className="absolute left-1/2 top-0 h-[168px] w-[88px] -translate-x-1/2 rounded-t-[46px] rounded-b-[34px] border border-white/15 bg-[linear-gradient(180deg,#E2E8F0_0%,#CBD5E1_22%,#94A3B8_60%,#475569_100%)] shadow-[0_18px_42px_rgba(0,0,0,0.45)]" />
-                  <div className="absolute left-1/2 top-[30px] h-11 w-11 -translate-x-1/2 rounded-full border border-cyan-200/60 bg-[radial-gradient(circle_at_50%_45%,#ECFEFF_0%,#67E8F9_62%,rgba(8,145,178,0.72)_100%)] shadow-[0_0_30px_rgba(103,232,249,0.42)]" />
-                  <div className="absolute left-[12px] top-[76px] h-[72px] w-[42px] -rotate-[18deg] rounded-l-[28px] rounded-r-[12px] border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)]" />
-                  <div className="absolute right-[12px] top-[76px] h-[72px] w-[42px] rotate-[18deg] rounded-r-[28px] rounded-l-[12px] border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)]" />
-                  <div className="absolute bottom-[38px] left-[24px] h-[72px] w-[28px] rounded-b-[22px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#CBD5E1,#475569)]" />
-                  <div className="absolute bottom-[38px] right-[24px] h-[72px] w-[28px] rounded-b-[22px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#CBD5E1,#475569)]" />
-                  <div className="absolute bottom-[10px] left-1/2 h-12 w-16 -translate-x-1/2 rounded-b-[24px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#64748B,#1E293B)]" />
+                  <div
+                    className="absolute left-1/2 top-1/2 rounded-full bg-cyan-200/30 blur-md"
+                    style={{ width: meteor.size * 0.9, height: meteor.size * 0.9, transform: "translate(-50%, -50%)" }}
+                  />
+                  <div
+                    className="relative rounded-full border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)] shadow-[0_10px_28px_rgba(0,0,0,0.4)]"
+                    style={{ width: meteor.size, height: meteor.size * 0.66 }}
+                  />
                 </div>
+              </motion.div>
+            ))}
+
+            <motion.div
+              className="absolute left-1/2 z-20"
+              animate={{ bottom: `${rocketBottom}%` }}
+              transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="-translate-x-1/2">
+                <motion.div
+                  animate={{ x: rocketX, rotate: rocketRotate }}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <motion.div
+                    className="relative flex flex-col items-center"
+                    animate={{ y: [0, -8, 0, 4, 0] }}
+                    transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <motion.div
+                      className="absolute top-[94%] h-44 w-24 rounded-full bg-cyan-300/25 blur-3xl"
+                      animate={{ scaleY: [0.88, 1.26, 0.94], opacity: [0.28, 0.85, 0.34] }}
+                      transition={{ duration: 0.72, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <motion.div
+                      className="absolute top-[88%] h-40 w-14 rounded-full bg-orange-300/45 blur-2xl"
+                      animate={{ scaleY: [0.82, 1.18, 0.86], opacity: [0.4, 1, 0.45] }}
+                      transition={{ duration: 0.48, repeat: Infinity, ease: "easeInOut" }}
+                    />
+
+                    {Array.from({ length: 8 }).map((_, index) => (
+                      <motion.span
+                        key={index}
+                        className="absolute top-[90%] h-4 w-4 rounded-full bg-cyan-200/60"
+                        style={{ left: `${14 + index * 10}%` }}
+                        animate={{ y: [0, 64 + index * 9], opacity: [0.8, 0], scale: [1, 0.15] }}
+                        transition={{ duration: 0.82 + index * 0.04, repeat: Infinity, delay: index * 0.07, ease: "easeOut" }}
+                      />
+                    ))}
+
+                    <div className="relative h-[220px] w-[150px]">
+                      <div className="absolute left-1/2 top-0 h-[168px] w-[88px] -translate-x-1/2 rounded-t-[46px] rounded-b-[34px] border border-white/15 bg-[linear-gradient(180deg,#E2E8F0_0%,#CBD5E1_22%,#94A3B8_60%,#475569_100%)] shadow-[0_18px_42px_rgba(0,0,0,0.45)]" />
+                      <div className="absolute left-1/2 top-[30px] h-11 w-11 -translate-x-1/2 rounded-full border border-cyan-200/60 bg-[radial-gradient(circle_at_50%_45%,#ECFEFF_0%,#67E8F9_62%,rgba(8,145,178,0.72)_100%)] shadow-[0_0_30px_rgba(103,232,249,0.42)]" />
+                      <div className="absolute left-[12px] top-[76px] h-[72px] w-[42px] -rotate-[18deg] rounded-l-[28px] rounded-r-[12px] border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)]" />
+                      <div className="absolute right-[12px] top-[76px] h-[72px] w-[42px] rotate-[18deg] rounded-r-[28px] rounded-l-[12px] border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)]" />
+                      <div className="absolute bottom-[38px] left-[24px] h-[72px] w-[28px] rounded-b-[22px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#CBD5E1,#475569)]" />
+                      <div className="absolute bottom-[38px] right-[24px] h-[72px] w-[28px] rounded-b-[22px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#CBD5E1,#475569)]" />
+                      <div className="absolute bottom-[10px] left-1/2 h-12 w-16 -translate-x-1/2 rounded-b-[24px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#64748B,#1E293B)]" />
+                    </div>
+                  </motion.div>
+                </motion.div>
               </div>
             </motion.div>
 
@@ -479,6 +651,7 @@ function SpaceRunCard({
     </div>
   );
 }
+
 
 function IntroScreen({
   canStart,
