@@ -1,9 +1,10 @@
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowLeft,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -52,13 +53,19 @@ const LOCAL_NUCLEUS_FIELDS = [
   "tiktok",
 ] as const;
 
-function sanitizeNucleusForLocalStorage(input: Record<string, unknown>): Record<string, unknown> {
+function sanitizeNucleusForLocalStorage(
+  input?: Partial<Record<(typeof LOCAL_NUCLEUS_FIELDS)[number], unknown>> | null,
+): Record<string, unknown> {
   const next: Record<string, unknown> = {};
+  if (!input) return next;
+
   LOCAL_NUCLEUS_FIELDS.forEach((field) => {
-    if (field in input) {
-      next[field] = input[field];
+    const value = input[field];
+    if (value !== undefined) {
+      next[field] = value;
     }
   });
+
   return next;
 }
 
@@ -115,10 +122,16 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function normalizeNucleus(storageKey: string, coreData?: BusinessCoreOut | null): Record<string, unknown> {
   const local = loadNucleus(storageKey);
   if (!coreData) return local;
-  const merged = { ...local, ...sanitizeNucleusForLocalStorage(coreData as Record<string, unknown>) };
+  const merged = { ...local, ...sanitizeNucleusForLocalStorage(coreData) };
   trySaveNucleus(storageKey, merged);
   return merged;
 }
@@ -338,104 +351,193 @@ function SpaceRunCard({
   title: string;
   description: string;
 }) {
+  const normalizedProgress = Math.max(3, Math.min(progress, 100));
+  const rocketTravel = normalizedProgress * 0.7;
   const stars = React.useMemo(
     () =>
-      Array.from({ length: 28 }, (_, index) => ({
+      Array.from({ length: 56 }, (_, index) => ({
         id: index,
-        left: `${(index * 17) % 97}%`,
-        top: `${(index * 13) % 88}%`,
-        scale: 0.7 + ((index % 4) * 0.18),
-        delay: (index % 6) * 0.2,
+        left: `${(index * 11.7) % 100}%`,
+        top: `${(index * 7.9) % 100}%`,
+        scale: 0.6 + ((index % 5) * 0.22),
+        delay: (index % 8) * 0.18,
       })),
     []
   );
 
-  const asteroids = React.useMemo(
+  const contrails = React.useMemo(
+    () =>
+      Array.from({ length: 6 }, (_, index) => ({
+        id: index,
+        left: `${14 + index * 13}%`,
+        delay: index * 0.15,
+        duration: 1.4 + index * 0.18,
+      })),
+    []
+  );
+
+  const checkpoints = React.useMemo(
     () => [
-      { id: "a1", size: 24, left: "18%", top: "24%", duration: 7.2 },
-      { id: "a2", size: 16, left: "56%", top: "18%", duration: 6.2 },
-      { id: "a3", size: 34, left: "74%", top: "52%", duration: 8.1 },
-      { id: "a4", size: 22, left: "32%", top: "66%", duration: 7.6 },
+      { id: "queued", label: "Fila" },
+      { id: "core", label: "Núcleo" },
+      { id: "catalog", label: "Catálogo" },
+      { id: "ai", label: "IA" },
+      { id: "done", label: "Entrega" },
     ],
     []
   );
 
   return (
-    <Card className="overflow-hidden border-cyan-400/20 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.16),transparent_38%),linear-gradient(180deg,rgba(8,11,20,0.96),rgba(8,11,20,1))]">
-      <CardContent className="grid gap-8 p-6 md:p-8 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="flex flex-col justify-between gap-6">
-          <div className="space-y-4">
-            <Badge variant="blue" className="w-fit">
-              SkyBob em execução
-            </Badge>
-            <div className="space-y-3">
-              <h1 className="text-3xl font-black tracking-tight md:text-4xl">{title}</h1>
-              <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">{description}</p>
-            </div>
-          </div>
+    <div className="relative isolate min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.16),transparent_28%),linear-gradient(180deg,#03060F_0%,#050914_45%,#07101D_100%)]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(77,232,255,0.18),transparent_24%),radial-gradient(circle_at_20%_80%,rgba(59,130,246,0.14),transparent_30%),radial-gradient(circle_at_80%_72%,rgba(168,85,247,0.12),transparent_26%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:42px_42px] opacity-40" />
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm text-slate-300">
-              <span>{label}</span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-white/[0.06]">
-              <motion.div
-                className="h-full rounded-full bg-[linear-gradient(90deg,#00C8E8,#4DE8FF)]"
-                animate={{ width: `${Math.max(6, Math.min(progress, 100))}%` }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              />
-            </div>
-            <div className="text-xs uppercase tracking-[0.22em] text-cyan-200">
-              Lendo o núcleo, organizando o nicho e preparando a entrega visual.
-            </div>
-          </div>
-        </div>
+      {stars.map((star) => (
+        <motion.span
+          key={star.id}
+          className="absolute rounded-full bg-white/90"
+          style={{ left: star.left, top: star.top, width: 2.3 * star.scale, height: 2.3 * star.scale }}
+          animate={{ opacity: [0.15, 0.95, 0.25], scale: [1, 1.35, 1] }}
+          transition={{ duration: 1.8, repeat: Infinity, delay: star.delay, ease: "easeInOut" }}
+        />
+      ))}
 
-        <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_50%_30%,rgba(77,232,255,0.14),transparent_45%),linear-gradient(180deg,rgba(4,8,16,0.92),rgba(6,9,18,1))]">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:36px_36px]" />
-
-          {stars.map((star) => (
-            <motion.span
-              key={star.id}
-              className="absolute rounded-full bg-white/90"
-              style={{ left: star.left, top: star.top, width: 2.5 * star.scale, height: 2.5 * star.scale }}
-              animate={{ opacity: [0.25, 0.9, 0.35], scale: [1, 1.4, 1] }}
-              transition={{ duration: 1.9, repeat: Infinity, delay: star.delay, ease: "easeInOut" }}
-            />
-          ))}
-
-          {asteroids.map((asteroid, index) => (
-            <motion.div
-              key={asteroid.id}
-              className="absolute rounded-full border border-white/10 bg-[linear-gradient(180deg,rgba(148,163,184,0.35),rgba(71,85,105,0.3))] shadow-[0_0_30px_rgba(15,23,42,0.25)]"
-              style={{ width: asteroid.size, height: asteroid.size, left: asteroid.left, top: asteroid.top }}
-              animate={{ y: [0, index % 2 === 0 ? -14 : 12, 0], rotate: [0, 12, -8, 0] }}
-              transition={{ duration: asteroid.duration, repeat: Infinity, ease: "easeInOut" }}
-            />
-          ))}
-
-          <motion.div
-            className="absolute left-[-12%] top-[52%] h-px w-[140%] bg-[linear-gradient(90deg,transparent,rgba(77,232,255,0.35),transparent)]"
-            animate={{ opacity: [0.2, 0.9, 0.2] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+      {contrails.map((line, index) => (
+        <motion.div
+          key={line.id}
+          className="absolute top-[18%] h-px w-40 bg-[linear-gradient(90deg,transparent,rgba(77,232,255,0.5),transparent)]"
+          style={{ left: line.left }}
+          animate={{ x: [-120, 820], opacity: [0, 0.8, 0] }}
+          transition={{ duration: line.duration, repeat: Infinity, delay: line.delay, ease: "linear" }}
+        >
+          <div
+            className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-200 blur-[2px]"
+            style={{ opacity: index % 2 === 0 ? 0.9 : 0.6 }}
           />
+        </motion.div>
+      ))}
 
-          <motion.div
-            className="absolute left-[-8%] top-[54%]"
-            animate={{ x: ["0%", "122%"], y: [0, -32, 12, -18, 0], rotate: [-12, -4, 6, -8] }}
-            transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <div className="relative">
-              <div className="absolute left-[-48px] top-1/2 h-3 w-16 -translate-y-1/2 rounded-full bg-cyan-300/35 blur-xl" />
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-cyan-300/20 bg-[radial-gradient(circle_at_35%_35%,rgba(77,232,255,0.24),transparent_58%)]">
-                <Rocket className="h-10 w-10 text-cyan-100" />
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[1600px] flex-col px-5 pb-8 pt-24 sm:px-8 lg:px-12">
+        <div className="grid flex-1 gap-10 xl:grid-cols-[0.94fr_1.06fr] xl:items-center">
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <Badge variant="blue" className="w-fit px-4 py-1.5 text-[11px] uppercase tracking-[0.28em]">
+                SkyBob em execução
+              </Badge>
+              <div className="space-y-4">
+                <h1 className="max-w-3xl text-4xl font-black tracking-tight md:text-5xl xl:text-6xl">{title}</h1>
+                <p className="max-w-2xl text-base leading-8 text-slate-300 md:text-lg">{description}</p>
               </div>
             </div>
-          </motion.div>
+
+            <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
+                <span>{label}</span>
+                <span className="font-semibold text-cyan-100">{Math.round(normalizedProgress)}%</span>
+              </div>
+
+              <div className="relative h-4 overflow-hidden rounded-full bg-white/[0.06]">
+                <motion.div
+                  className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,#00C8E8,#4DE8FF)] shadow-[0_0_36px_rgba(77,232,255,0.55)]"
+                  animate={{ width: `${normalizedProgress}%` }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                />
+                <motion.div
+                  className="absolute inset-y-[2px] w-20 rounded-full bg-white/35 blur-md"
+                  animate={{ left: `calc(${normalizedProgress}% - 2.5rem)` }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                />
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-5">
+                {checkpoints.map((checkpoint, index) => {
+                  const checkpointProgress = (index / (checkpoints.length - 1)) * 100;
+                  const active = normalizedProgress >= checkpointProgress - 2;
+                  return (
+                    <div
+                      key={checkpoint.id}
+                      className={cn(
+                        "rounded-2xl border px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.22em] transition",
+                        active
+                          ? "border-cyan-300/35 bg-cyan-400/12 text-cyan-100 shadow-soft"
+                          : "border-white/10 bg-white/[0.02] text-slate-500"
+                      )}
+                    >
+                      {checkpoint.label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.24em] text-cyan-200/90">
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2">Tela cheia ativa</span>
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2">Progresso real da missão</span>
+            </div>
+          </div>
+
+          <div className="relative flex min-h-[560px] items-end justify-center overflow-hidden rounded-[40px] border border-white/10 bg-[radial-gradient(circle_at_50%_15%,rgba(77,232,255,0.18),transparent_30%),linear-gradient(180deg,rgba(4,8,16,0.94),rgba(5,9,18,0.98))] p-6 shadow-[0_24px_100px_rgba(0,0,0,0.45)]">
+            <motion.div
+              className="absolute left-[16%] top-[12%] h-28 w-28 rounded-full bg-cyan-300/8 blur-3xl"
+              animate={{ opacity: [0.45, 0.9, 0.45], scale: [0.92, 1.12, 0.92] }}
+              transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div
+              className="absolute right-[12%] top-[24%] h-24 w-24 rounded-full bg-fuchsia-400/8 blur-3xl"
+              animate={{ opacity: [0.3, 0.75, 0.3], scale: [1, 1.18, 1] }}
+              transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
+            />
+
+            <div className="absolute inset-x-0 bottom-0 h-[42%] bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.22),rgba(0,0,0,0.55))]" />
+
+            <motion.div
+              className="absolute bottom-[-6%] left-1/2 z-20"
+              animate={{ y: `-${rocketTravel}vh`, x: ["-50%", "-49.2%", "-50.8%", "-50%"], rotate: [-8, -3, 4, 0] }}
+              transition={{
+                y: { duration: 0.42, ease: "easeOut" },
+                x: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
+                rotate: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
+              }}
+            >
+              <div className="relative flex flex-col items-center">
+                <motion.div
+                  className="absolute top-[92%] h-40 w-20 rounded-full bg-cyan-300/30 blur-3xl"
+                  animate={{ scaleY: [0.85, 1.25, 0.92], opacity: [0.35, 0.9, 0.4] }}
+                  transition={{ duration: 0.7, repeat: Infinity, ease: "easeInOut" }}
+                />
+                <motion.div
+                  className="absolute top-[84%] h-36 w-12 rounded-full bg-orange-300/40 blur-2xl"
+                  animate={{ scaleY: [0.8, 1.18, 0.85], opacity: [0.4, 0.95, 0.45] }}
+                  transition={{ duration: 0.52, repeat: Infinity, ease: "easeInOut" }}
+                />
+
+                {Array.from({ length: 7 }).map((_, index) => (
+                  <motion.span
+                    key={index}
+                    className="absolute top-[88%] h-4 w-4 rounded-full bg-cyan-200/60"
+                    style={{ left: `${18 + index * 9}%` }}
+                    animate={{ y: [0, 60 + index * 10], opacity: [0.85, 0], scale: [1, 0.2] }}
+                    transition={{ duration: 0.9 + index * 0.05, repeat: Infinity, delay: index * 0.08, ease: "easeOut" }}
+                  />
+                ))}
+
+                <div className="relative h-[220px] w-[150px]">
+                  <div className="absolute left-1/2 top-0 h-[168px] w-[88px] -translate-x-1/2 rounded-t-[46px] rounded-b-[34px] border border-white/15 bg-[linear-gradient(180deg,#E2E8F0_0%,#CBD5E1_22%,#94A3B8_60%,#475569_100%)] shadow-[0_18px_42px_rgba(0,0,0,0.45)]" />
+                  <div className="absolute left-1/2 top-[30px] h-11 w-11 -translate-x-1/2 rounded-full border border-cyan-200/60 bg-[radial-gradient(circle_at_50%_45%,#ECFEFF_0%,#67E8F9_62%,rgba(8,145,178,0.72)_100%)] shadow-[0_0_30px_rgba(103,232,249,0.42)]" />
+                  <div className="absolute left-[12px] top-[76px] h-[72px] w-[42px] -rotate-[18deg] rounded-l-[28px] rounded-r-[12px] border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)]" />
+                  <div className="absolute right-[12px] top-[76px] h-[72px] w-[42px] rotate-[18deg] rounded-r-[28px] rounded-l-[12px] border border-white/10 bg-[linear-gradient(180deg,#94A3B8,#334155)]" />
+                  <div className="absolute bottom-[38px] left-[24px] h-[72px] w-[28px] rounded-b-[22px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#CBD5E1,#475569)]" />
+                  <div className="absolute bottom-[38px] right-[24px] h-[72px] w-[28px] rounded-b-[22px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#CBD5E1,#475569)]" />
+                  <div className="absolute bottom-[10px] left-1/2 h-12 w-16 -translate-x-1/2 rounded-b-[24px] rounded-t-[10px] border border-white/10 bg-[linear-gradient(180deg,#64748B,#1E293B)]" />
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="pointer-events-none absolute inset-x-[16%] bottom-[8%] h-px bg-[linear-gradient(90deg,transparent,rgba(77,232,255,0.35),transparent)]" />
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -757,6 +859,7 @@ function HookLabView({
 export default function SkyBobPage() {
   const userEmail = useAuthStore((state) => state.user?.email ?? null);
   const authToken = useAuthStore((state) => state.token);
+  const navigate = useNavigate();
   const storageKey = React.useMemo(() => buildScopedStorageKey(userEmail), [userEmail]);
 
   const { data: coreData } = useQuery({
@@ -780,6 +883,14 @@ export default function SkyBobPage() {
   const [executionProgress, setExecutionProgress] = React.useState(0);
   const [executionLabel, setExecutionLabel] = React.useState("Preparando missão");
 
+  const handleBack = React.useCallback(() => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/dashboard");
+  }, [navigate]);
+
   React.useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
@@ -798,26 +909,20 @@ export default function SkyBobPage() {
   }, [coreData?.skybob, nucleusSignature]);
 
   React.useEffect(() => {
-    const mode = isGeneratingHooks ? "hooks" : isRunningStudy ? "study" : null;
-    if (!mode) {
-      setExecutionProgress(0);
+    if (!isGeneratingHooks) {
+      if (!isRunningStudy) {
+        setExecutionProgress(0);
+        setExecutionLabel("Preparando missão");
+      }
       return;
     }
 
-    const labels =
-      mode === "hooks"
-        ? [
-            "Lendo o que você aprovou e rejeitou",
-            "Reposicionando o Hook Lab",
-            "Eliminando repetições",
-            "Montando nova rodada de hooks",
-          ]
-        : [
-            "Lendo o núcleo da empresa",
-            "Organizando o nicho",
-            "Mapeando serviços e sinais",
-            "Montando o estudo e o Hook Lab",
-          ];
+    const labels = [
+      "Lendo o que você aprovou e rejeitou",
+      "Reposicionando o Hook Lab",
+      "Eliminando repetições",
+      "Montando nova rodada de hooks",
+    ];
 
     setExecutionLabel(labels[0]);
     setExecutionProgress(8);
@@ -889,30 +994,53 @@ export default function SkyBobPage() {
     }
 
     setActiveTab("study");
+    setExecutionLabel("Preparando lançamento");
+    setExecutionProgress(4);
     setIsRunningStudy(true);
 
     try {
-      const catalogAnalysis = await api.skybob.preflight({ nucleus });
-      setExecutionProgress((prev) => Math.max(prev, 38));
-
-      const result = await api.skybob.run({
+      const job = await api.skybob.startJob({
         nucleus,
-        catalog_analysis: catalogAnalysis,
         mode: "full",
       });
 
+      let latestStatus = job;
+      setExecutionLabel(job.stage || "Missão na fila");
+      setExecutionProgress(Math.max(4, Math.round((job.progress || 0) * 100)));
+
+      while (latestStatus.status !== "done") {
+        if (latestStatus.status === "error") {
+          throw new Error(latestStatus.error || "A missão do SkyBob falhou.");
+        }
+
+        await sleep(900);
+
+        latestStatus = await api.skybob.getJob(job.job_id);
+        setExecutionLabel(latestStatus.stage || "Processando missão");
+        setExecutionProgress(Math.max(4, Math.round((latestStatus.progress || 0) * 100)));
+      }
+
+      const jobResult = await api.skybob.getJobResult(job.job_id);
+      const result = jobResult.result;
+      const catalogAnalysis = result.catalog_analysis ?? null;
+
+      setExecutionLabel("Missão concluída");
       setExecutionProgress(100);
+
+      await sleep(650);
 
       await setWorkspaceAndPersist(
         (current) => ({
           ...current,
           nucleus_signature: nucleusSignature,
           model_used: result.model_used,
-          catalog_analysis: result.catalog_analysis ?? catalogAnalysis,
+          catalog_analysis: catalogAnalysis,
           study: result,
         }),
         { successMessage: "SkyBob executado e salvo no núcleo da empresa." }
       );
+
+      await sleep(300);
     } catch (error) {
       toastApiError(error, "Não consegui executar o SkyBob");
     } finally {
@@ -1015,10 +1143,15 @@ export default function SkyBobPage() {
     : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-4 pb-24 pt-2 sm:px-6 lg:px-8">
-      {!hasStudy && !isRunningStudy && !isGeneratingHooks ? (
-        <IntroScreen canStart={filledCount > 0} filledCount={filledCount} onStart={() => void startSkyBob()} />
-      ) : null}
+    <div className="relative min-h-dvh bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.08),transparent_26%),linear-gradient(180deg,#050914_0%,#070C16_100%)]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top,rgba(77,232,255,0.12),transparent_60%)]" />
+
+      <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+        <Button variant="outline" onClick={handleBack} className="border-white/15 bg-black/20 backdrop-blur">
+          <ArrowLeft className="h-4 w-4" />
+          Voltar
+        </Button>
+      </div>
 
       {(isRunningStudy || isGeneratingHooks) ? (
         <SpaceRunCard
@@ -1031,85 +1164,89 @@ export default function SkyBobPage() {
               : "O SkyBob está consumindo o núcleo da empresa, interpretando o nicho e preparando uma entrega mais clara para o usuário."
           }
         />
-      ) : null}
-
-      {hasStudy && !isRunningStudy && !isGeneratingHooks ? (
-        <>
-          <Card className="overflow-hidden border-cyan-400/16 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.14),transparent_32%),linear-gradient(180deg,rgba(10,16,28,0.94),rgba(8,11,20,0.98))]">
-            <CardContent className="flex flex-col gap-6 p-6 md:p-8">
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {resultHeroBadges.map((badge, index) => (
-                      <Badge key={`${badge.label}-${index}`} variant={badge.variant}>
-                        {badge.label}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="space-y-3">
-                    <h1 className="text-3xl font-black tracking-tight md:text-4xl">SkyBob salvo e organizado em duas partes: estudo do nicho e Hook Lab.</h1>
-                    <p className="max-w-3xl text-sm leading-8 text-slate-300 md:text-base">
-                      Aqui o usuário enxerga primeiro o estudo do nicho com clareza. O Hook Lab fica separado e só muda quando você pede uma nova rodada de hooks.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-2 flex items-center gap-2 text-cyan-200">
-                      <Layers3 className="h-4 w-4" />
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em]">Itens detectados</span>
+      ) : (
+        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-4 pb-24 pt-24 sm:px-6 lg:px-8">
+          {!hasStudy ? (
+            <IntroScreen canStart={filledCount > 0} filledCount={filledCount} onStart={() => void startSkyBob()} />
+          ) : (
+            <>
+              <Card className="overflow-hidden border-cyan-400/16 bg-[radial-gradient(circle_at_top,rgba(0,200,232,0.14),transparent_32%),linear-gradient(180deg,rgba(10,16,28,0.94),rgba(8,11,20,0.98))]">
+                <CardContent className="flex flex-col gap-6 p-6 md:p-8">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {resultHeroBadges.map((badge, index) => (
+                          <Badge key={`${badge.label}-${index}`} variant={badge.variant}>
+                            {badge.label}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="space-y-3">
+                        <h1 className="text-3xl font-black tracking-tight md:text-4xl">SkyBob salvo e organizado em duas partes: estudo do nicho e Hook Lab.</h1>
+                        <p className="max-w-3xl text-sm leading-8 text-slate-300 md:text-base">
+                          Aqui o usuário enxerga primeiro o estudo do nicho com clareza. O Hook Lab fica separado e só muda quando você pede uma nova rodada de hooks.
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-2xl font-black">{catalogAnalysis?.detected_items.length ?? 0}</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-2 flex items-center gap-2 text-cyan-200">
-                      <Lightbulb className="h-4 w-4" />
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em]">Hooks curtidos</span>
-                    </div>
-                    <div className="text-2xl font-black">{hookLikes}</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-2 flex items-center gap-2 text-cyan-200">
-                      <Target className="h-4 w-4" />
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em]">Blocos de insight</span>
-                    </div>
-                    <div className="text-2xl font-black">{study?.cards.length ?? 0}</div>
-                  </div>
-                </div>
-              </div>
 
-              {staleStudy ? (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
-                  O núcleo da empresa mudou depois que este estudo foi salvo. Esta tela continua mostrando o último estudo válido salvo no núcleo.
-                </div>
+                    <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="mb-2 flex items-center gap-2 text-cyan-200">
+                          <Layers3 className="h-4 w-4" />
+                          <span className="text-xs font-semibold uppercase tracking-[0.18em]">Itens detectados</span>
+                        </div>
+                        <div className="text-2xl font-black">{catalogAnalysis?.detected_items.length ?? 0}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="mb-2 flex items-center gap-2 text-cyan-200">
+                          <Lightbulb className="h-4 w-4" />
+                          <span className="text-xs font-semibold uppercase tracking-[0.18em]">Hooks curtidos</span>
+                        </div>
+                        <div className="text-2xl font-black">{hookLikes}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="mb-2 flex items-center gap-2 text-cyan-200">
+                          <Target className="h-4 w-4" />
+                          <span className="text-xs font-semibold uppercase tracking-[0.18em]">Blocos de insight</span>
+                        </div>
+                        <div className="text-2xl font-black">{study?.cards.length ?? 0}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {staleStudy ? (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                      O núcleo da empresa mudou depois que este estudo foi salvo. Esta tela continua mostrando o último estudo válido salvo no núcleo.
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-3">
+                    <TabButton active={activeTab === "study"} onClick={() => setActiveTab("study")} icon={<Sparkles className="h-4 w-4" />} label="Estudo do nicho" />
+                    <TabButton active={activeTab === "hooklab"} onClick={() => setActiveTab("hooklab")} icon={<Rocket className="h-4 w-4" />} label="Hook Lab" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {activeTab === "study" && study ? (
+                <StudyView study={study} catalogAnalysis={catalogAnalysis} likedHooksCount={hookLikes} />
               ) : null}
 
-              <div className="flex flex-wrap gap-3">
-                <TabButton active={activeTab === "study"} onClick={() => setActiveTab("study")} icon={<Sparkles className="h-4 w-4" />} label="Estudo do nicho" />
-                <TabButton active={activeTab === "hooklab"} onClick={() => setActiveTab("hooklab")} icon={<Rocket className="h-4 w-4" />} label="Hook Lab" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {activeTab === "study" && study ? (
-            <StudyView study={study} catalogAnalysis={catalogAnalysis} likedHooksCount={hookLikes} />
-          ) : null}
-
-          {activeTab === "hooklab" && study ? (
-            <HookLabView
-              hooks={hooksWithFeedback}
-              likes={hookLikes}
-              dislikes={hookDislikes}
-              canGenerate={canGenerateHooks}
-              isGenerating={isGeneratingHooks}
-              onVote={handleHookVote}
-              onGenerate={() => void generateNewHooks()}
-              generationLockedMessage={generationLockedMessage}
-            />
-          ) : null}
-        </>
-      ) : null}
+              {activeTab === "hooklab" && study ? (
+                <HookLabView
+                  hooks={hooksWithFeedback}
+                  likes={hookLikes}
+                  dislikes={hookDislikes}
+                  canGenerate={canGenerateHooks}
+                  isGenerating={isGeneratingHooks}
+                  onVote={handleHookVote}
+                  onGenerate={() => void generateNewHooks()}
+                  generationLockedMessage={generationLockedMessage}
+                />
+              ) : null}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

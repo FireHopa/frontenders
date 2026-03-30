@@ -119,7 +119,7 @@ export default function ImageHistoryView({ onBack }: Props) {
             {items.map((item) => (
               <Card key={item.id} className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(7,12,22,0.96)_0%,rgba(6,10,18,0.98)_100%)] shadow-[0_10px_30px_rgba(0,0,0,0.22)] rounded-2xl">
                 <div className="relative aspect-square bg-black/30">
-                  <img src={item.url} alt={item.motor} className="h-full w-full object-cover" loading="lazy" />
+                  <img src={item.thumbnailUrl || item.url} alt={item.motor} className="h-full w-full object-cover" loading="lazy" />
                   <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/60 px-3 py-1 text-[11px] font-medium text-white backdrop-blur-md">
                     {formatHistoryMode(item.type)}
                   </div>
@@ -157,10 +157,10 @@ export default function ImageHistoryView({ onBack }: Props) {
 
                   <div className="flex gap-3">
                     <a
-                      href={item.url}
+                      href={item.url || item.thumbnailUrl || "#"}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex h-11 flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-slate-200 transition hover:bg-white/[0.08]"
+                      className={`flex h-11 flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-slate-200 transition hover:bg-white/[0.08] ${!item.url ? "opacity-40 pointer-events-none" : ""}`}
                     >
                       <ImageIcon className="mr-2 h-4 w-4" />
                       Abrir

@@ -25,6 +25,7 @@ import { YouTubePublishModal, type YouTubePublishValues } from "@/components/you
 import { TikTokPublishModal, type TikTokPublishValues } from "@/components/tiktok/TikTokPublishModal";
 import { exportAuthorityFormat as exportFormat } from "@/lib/authorityExport";
 import { bobarService } from "@/services/bobar";
+import { buildAuthorityImportPayload } from "@/lib/bobarImported";
 import { ArrowLeft, Loader2, Sparkles, RotateCcw, Printer, ChevronDown, FileText, Linkedin, Instagram, Facebook, Youtube, FolderKanban } from "lucide-react";
 
 const STORAGE_KEY_PREFIX = "ori_authority_nucleus_v1";
@@ -231,6 +232,21 @@ export default function AuthorityAgentChatPage() {
     `);
     printWindow.document.close();
   }
+
+  async function handleSendToBobar() {
+    if (!resultMd || !agent) return;
+
+    setIsSendingToBobar(true);
+    try {
+      await bobarService.importCard(buildAuthorityImportPayload(resultMd, agent));
+      toastSuccess("Roteiro importado para o Bobar.");
+    } catch (error) {
+      toastApiError(error, "Não foi possível enviar este resultado para o Bobar");
+    } finally {
+      setIsSendingToBobar(false);
+    }
+  }
+
 
   function downloadFile(format: "md" | "txt" | "doc" | "pdf") {
     if (format === "pdf") {

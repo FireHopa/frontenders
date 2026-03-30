@@ -7,6 +7,12 @@ export function AppShell() {
   const location = useLocation();
   const [sidebarW, setSidebarW] = React.useState(268);
 
+  const params = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const isReferenceEditorRoute =
+    location.pathname === "/image-engine" && params.get("mode") === "edit-reference";
+  const isSkyBobFullscreenRoute = location.pathname === "/skybob";
+  const isFullscreenRoute = isReferenceEditorRoute || isSkyBobFullscreenRoute;
+
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <a
@@ -16,18 +22,21 @@ export function AppShell() {
         Pular para o conteúdo
       </a>
 
-      <Sidebar onWidthChange={setSidebarW} />
+      {!isFullscreenRoute ? <Sidebar onWidthChange={setSidebarW} /> : null}
 
-      <div style={{ paddingLeft: sidebarW }} className="min-h-dvh">
+      <div
+        style={isFullscreenRoute ? undefined : { paddingLeft: sidebarW }}
+        className={isReferenceEditorRoute ? "h-dvh overflow-hidden" : "min-h-dvh"}
+      >
         <AnimatePresence mode="wait">
           <motion.main
-            key={location.pathname}
+            key={`${location.pathname}${location.search}`}
             id="main-content"
             initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -6, filter: "blur(8px)" }}
             transition={{ duration: 0.22 }}
-            className="container py-10"
+            className={isReferenceEditorRoute ? "h-dvh overflow-hidden" : isSkyBobFullscreenRoute ? "min-h-dvh" : "container py-10"}
           >
             <Outlet />
           </motion.main>

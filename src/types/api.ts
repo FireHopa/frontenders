@@ -221,6 +221,21 @@ export interface SkyBobRunResponse {
   serialized_text: string;
 }
 
+export interface SkyBobJobStatusResponse {
+  job_id: string;
+  status: "queued" | "running" | "done" | "error";
+  stage: string;
+  progress: number;
+  mode: "full" | "refine" | string;
+  error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface SkyBobJobResultResponse extends SkyBobJobStatusResponse {
+  result: SkyBobRunResponse;
+}
+
 export interface AuthorityAgentRunRequest {
   client_id: string;
   agent_key: string;

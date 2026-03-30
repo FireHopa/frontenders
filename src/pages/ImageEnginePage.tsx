@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowRight, Clock3, ImagePlus, Layers3, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,18 +10,40 @@ import ImageHistoryView from "@/components/image-engine/ImageHistoryView";
 type Mode = "select" | "generate" | "edit" | "history";
 
 export default function ImageEnginePage() {
-  const [mode, setMode] = useState<Mode>("select");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const mode = useMemo<Mode>(() => {
+    const rawMode = searchParams.get("mode");
+    if (rawMode === "generate") return "generate";
+    if (rawMode === "history") return "history";
+    if (rawMode === "edit-reference") return "edit";
+    return "select";
+  }, [searchParams]);
+
+  const openMode = (nextMode: Mode) => {
+    if (nextMode === "select") {
+      setSearchParams({}, { replace: false });
+      return;
+    }
+
+    setSearchParams(
+      { mode: nextMode === "edit" ? "edit-reference" : nextMode },
+      { replace: false }
+    );
+  };
+
+  const handleBack = () => openMode("select");
 
   if (mode === "generate") {
-    return <ImageGenerationFromScratch onBack={() => setMode("select")} />;
+    return <ImageGenerationFromScratch onBack={handleBack} />;
   }
 
   if (mode === "edit") {
-    return <ImageEditReferenceView onBack={() => setMode("select")} />;
+    return <ImageEditReferenceView onBack={handleBack} />;
   }
 
   if (mode === "history") {
-    return <ImageHistoryView onBack={() => setMode("select")} />;
+    return <ImageHistoryView onBack={handleBack} />;
   }
 
   return (
@@ -71,7 +94,7 @@ export default function ImageEnginePage() {
                 <Button
                   size="lg"
                   className="mt-8 w-full font-semibold gap-2 rounded-xl h-12 px-6 bg-blue-600 hover:bg-blue-500 text-white"
-                  onClick={() => setMode("generate")}
+                  onClick={() => openMode("generate")}
                 >
                   Abrir geração do zero
                   <ArrowRight className="w-4 h-4" />
@@ -107,7 +130,7 @@ export default function ImageEnginePage() {
                   size="lg"
                   variant="outline"
                   className="mt-8 w-full font-semibold gap-2 rounded-xl h-12 px-6 border-purple-400/20 bg-purple-500/10 text-purple-200 hover:bg-purple-500/15 hover:text-white"
-                  onClick={() => setMode("edit")}
+                  onClick={() => openMode("edit")}
                 >
                   Abrir edição por referência
                   <ArrowRight className="w-4 h-4" />
@@ -121,7 +144,7 @@ export default function ImageEnginePage() {
               size="lg"
               variant="outline"
               className="min-w-[260px] rounded-2xl h-12 px-8 border-white/10 bg-white/[0.04] text-slate-100 hover:bg-white/[0.08]"
-              onClick={() => setMode("history")}
+              onClick={() => openMode("history")}
             >
               <Clock3 className="w-4 h-4 mr-2" />
               Histórico

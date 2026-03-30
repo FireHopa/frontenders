@@ -17,6 +17,8 @@ import type {
   AuthorityAgentRunResponse,
   SuggestVideoFormatResponse,
   SkyBobCatalogAnalysis,
+  SkyBobJobResultResponse,
+  SkyBobJobStatusResponse,
   SkyBobRunResponse,
 } from "@/types/api";
 
@@ -67,6 +69,12 @@ export const api = {
   skybob: {
     preflight: (payload: SkyBobCatalogIn) =>
       http<SkyBobCatalogAnalysis>(`/api/skybob/preflight`, { method: "POST", json: payload }),
+    startJob: (payload: SkyBobRunIn) =>
+      http<SkyBobJobStatusResponse>(`/api/skybob/jobs`, { method: "POST", json: payload }),
+    getJob: (jobId: string) =>
+      http<SkyBobJobStatusResponse>(`/api/skybob/jobs/${encodeURIComponent(jobId)}`),
+    getJobResult: (jobId: string) =>
+      http<SkyBobJobResultResponse>(`/api/skybob/jobs/${encodeURIComponent(jobId)}/result`),
     run: (payload: SkyBobRunIn) =>
       http<SkyBobRunResponse>(`/api/skybob/run`, { method: "POST", json: payload }),
   },

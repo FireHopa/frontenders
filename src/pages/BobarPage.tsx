@@ -37,10 +37,18 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { exportAuthorityFormat } from "@/lib/authorityExport";
+import { AUTHORITY_AGENTS, authorityAgentByKey } from "@/constants/authorityAgents";
+import {
+  buildAuthorityWorkspaceSourceKind,
+  buildImportedWorkspaceBlueprint,
+  extractAuthorityAgentKey,
+  getImportedWorkspaceColumnIds,
+  inferImportedWorkspaceColumnIds,
+  isAuthorityImportCard,
+  writeImportedWorkspaceMeta,
+} from "@/lib/bobarImported";
 import { toastApiError, toastInfo, toastSuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { BobarImportsPanel } from "@/components/bobar/BobarImportsPanel";
-import { isAuthorityImportCard } from "@/lib/bobarImported";
 import {
   bobarService,
   type BobarBoard,
@@ -89,13 +97,14 @@ type DragCardState = {
   fromColumnId: number;
 };
 
-type BobarViewMode = "quadro" | "importados";
-
 type ColumnDialogState = { mode: "create"; column: null } | { mode: "rename"; column: BobarColumn };
 
 type DeleteDialogState =
   | { type: "column"; column: BobarColumn }
   | { type: "card"; card: BobarCard };
+
+type BobarViewMode = "board" | "imports";
+type ImportProgressStatus = "todo" | "in_progress" | "done";
 
 const CARD_TYPE_OPTIONS: Array<{ value: BobarCardType; label: string }> = [
   { value: "manual", label: "Manual" },
@@ -510,18 +519,93 @@ function clampPosition(value: number, min: number, max: number) {
 }
 
 function autoArrangeFlow(flow: BobarFlowchart) {
-  const ordered = [...flow.nodes].sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
-  const columns = Math.max(2, Math.min(4, Math.ceil(Math.sqrt(ordered.length || 1))));
-  const nodes = ordered.map((node, index) =>
-    normalizeFlowNode(
+  if (!flow.nodes.length) return flow;
+
+  const byId = new Map(flow.nodes.map((node) => [node.id, node]));
+  const outgoing = new Map<string, string[]>();
+  const indegree = new Map<string, number>();
+
+  for (const node of flow.nodes) {
+    outgoing.set(node.id, []);
+    indegree.set(node.id, 0);
+  }
+
+  for (const edge of flow.edges) {
+    if (!byId.has(edge.source) || !byId.has(edge.target)) continue;
+    outgoing.get(edge.source)?.push(edge.target);
+    indegree.set(edge.target, (indegree.get(edge.target) || 0) + 1);
+  }
+
+  const timeValue = (node: BobarFlowNode) => {
+    const match = String(node.time || node.title || "").match(/(\d+(?:[.,]\d+)?)/);
+    return match ? Number(String(match[1]).replace(",", ".")) : Number.POSITIVE_INFINITY;
+  };
+
+  const queue = flow.nodes
+    .filter((node) => (indegree.get(node.id) || 0) === 0)
+    .sort((a, b) => {
+      const delta = timeValue(a) - timeValue(b);
+      if (Number.isFinite(delta) && delta !== 0) return delta;
+      return a.y === b.y ? a.x - b.x : a.y - b.y;
+    })
+    .map((node) => node.id);
+
+  const visited = new Set<string>();
+  const orderedIds: string[] = [];
+  const depthById = new Map<string, number>();
+
+  for (const node of flow.nodes) depthById.set(node.id, 0);
+
+  while (queue.length) {
+    const nodeId = queue.shift()!;
+    if (visited.has(nodeId)) continue;
+    visited.add(nodeId);
+    orderedIds.push(nodeId);
+
+    for (const nextId of outgoing.get(nodeId) || []) {
+      depthById.set(nextId, Math.max(depthById.get(nextId) || 0, (depthById.get(nodeId) || 0) + 1));
+      indegree.set(nextId, (indegree.get(nextId) || 0) - 1);
+      if ((indegree.get(nextId) || 0) <= 0) queue.push(nextId);
+    }
+
+    queue.sort((leftId, rightId) => {
+      const left = byId.get(leftId)!;
+      const right = byId.get(rightId)!;
+      const delta = timeValue(left) - timeValue(right);
+      if (Number.isFinite(delta) && delta !== 0) return delta;
+      return left.y === right.y ? left.x - right.x : left.y - right.y;
+    });
+  }
+
+  for (const node of flow.nodes) {
+    if (!visited.has(node.id)) orderedIds.push(node.id);
+  }
+
+  const lanes = new Map<number, BobarFlowNode[]>();
+  for (const nodeId of orderedIds) {
+    const node = byId.get(nodeId);
+    if (!node) continue;
+    const lane = depthById.get(nodeId) || 0;
+    const bucket = lanes.get(lane) || [];
+    bucket.push(node);
+    lanes.set(lane, bucket);
+  }
+
+  const nodes = orderedIds.map((nodeId, index) => {
+    const node = byId.get(nodeId)!;
+    const lane = depthById.get(nodeId) || 0;
+    const laneNodes = lanes.get(lane) || [node];
+    const laneIndex = laneNodes.findIndex((candidate) => candidate.id === nodeId);
+    return normalizeFlowNode(
       {
         ...node,
-        x: 80 + (index % columns) * 300,
-        y: 80 + Math.floor(index / columns) * 190,
+        x: 88 + lane * 340,
+        y: 88 + laneIndex * 244,
       },
       index,
-    ),
-  );
+    );
+  });
+
   return { ...flow, nodes };
 }
 
@@ -532,6 +616,113 @@ function readTemplateKeyFromStructure(structureJson?: string | null) {
   } catch {
     return "";
   }
+}
+
+const IMPORT_PROGRESS_OPTIONS: Array<{ value: ImportProgressStatus; label: string }> = [
+  { value: "todo", label: "A fazer" },
+  { value: "in_progress", label: "Em progresso" },
+  { value: "done", label: "Finalizado" },
+];
+
+function readImportProgressStatus(structureJson?: string | null): ImportProgressStatus {
+  try {
+    const parsed = JSON.parse(structureJson || "{}");
+    const value = String(parsed?.meta?.import_status || "").toLowerCase();
+    if (value === "in_progress") return "in_progress";
+    if (value === "done") return "done";
+    return "todo";
+  } catch {
+    return "todo";
+  }
+}
+
+function writeImportProgressStatus(
+  structureJson: string | null | undefined,
+  status: ImportProgressStatus,
+) {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const raw = JSON.parse(structureJson || "{}");
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      parsed = raw as Record<string, unknown>;
+    }
+  } catch {
+    parsed = {};
+  }
+
+  const currentMeta =
+    parsed.meta && typeof parsed.meta === "object" && !Array.isArray(parsed.meta)
+      ? (parsed.meta as Record<string, unknown>)
+      : {};
+
+  return JSON.stringify(
+    {
+      ...parsed,
+      meta: {
+        ...currentMeta,
+        import_status: status,
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function importProgressBadgeClasses(status: ImportProgressStatus) {
+  if (status === "done") return "border-emerald-400/25 bg-emerald-400/12 text-emerald-100";
+  if (status === "in_progress") return "border-amber-400/25 bg-amber-400/12 text-amber-100";
+  return "border-white/10 bg-white/[0.04] text-white/70";
+}
+
+function importProgressButtonClasses(active: boolean, status: ImportProgressStatus) {
+  if (!active) {
+    return "border-white/10 bg-white/[0.03] text-white/55 hover:border-white/20 hover:bg-white/[0.05] hover:text-white";
+  }
+  if (status === "done") return "border-emerald-400/35 bg-emerald-400/15 text-emerald-50";
+  if (status === "in_progress") return "border-amber-400/35 bg-amber-400/15 text-amber-50";
+  return "border-cyan-400/35 bg-cyan-400/15 text-cyan-50";
+}
+
+function formatImportProgressLabel(status: ImportProgressStatus) {
+  return IMPORT_PROGRESS_OPTIONS.find((option) => option.value === status)?.label || "A fazer";
+}
+
+function parseFlowContentSections(value: string | null | undefined) {
+  const lines = normalizeText(value)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const actionParts: string[] = [];
+  const speechParts: string[] = [];
+  const otherParts: string[] = [];
+  let bucket: "action" | "speech" | "other" = "other";
+
+  for (const line of lines) {
+    const actionMatch = line.match(/^a[cç][aã]o\s*:\s*(.*)$/i);
+    if (actionMatch) {
+      bucket = "action";
+      if (actionMatch[1]) actionParts.push(actionMatch[1].trim());
+      continue;
+    }
+
+    const speechMatch = line.match(/^fala\s*:\s*(.*)$/i);
+    if (speechMatch) {
+      bucket = "speech";
+      if (speechMatch[1]) speechParts.push(speechMatch[1].trim());
+      continue;
+    }
+
+    if (bucket === "action") actionParts.push(line);
+    else if (bucket === "speech") speechParts.push(line);
+    else otherParts.push(line);
+  }
+
+  return {
+    action: actionParts.join(" ").trim(),
+    speech: speechParts.join(" ").trim(),
+    other: otherParts.join("\n").trim(),
+  };
 }
 
 function typeLabel(cardType?: string | null) {
@@ -675,19 +866,38 @@ function firstCardId(board: BobarBoard | null) {
   return null;
 }
 
-function filterBoardCards(board: BobarBoard | null, predicate: (card: BobarCard) => boolean) {
-  if (!board) return null;
+function firstCardIdFromColumns(columns: BobarColumn[]) {
+  for (const column of columns) {
+    if (column.cards[0]) return column.cards[0].id;
+  }
+  return null;
+}
 
-  const columns = board.columns.map((column) => ({
-    ...column,
-    cards: column.cards.filter(predicate),
-  }));
+function diffNewColumnId(previous: BobarBoard | null, next: BobarBoard) {
+  const previousIds = new Set((previous?.columns || []).map((column) => column.id));
+  const added = next.columns.find((column) => !previousIds.has(column.id));
+  return added?.id || null;
+}
 
-  return {
-    ...board,
-    columns,
-    total_cards: columns.reduce((acc, column) => acc + column.cards.length, 0),
-  };
+function diffNewCardId(previous: BobarBoard | null, next: BobarBoard) {
+  const previousIds = new Set((previous?.columns || []).flatMap((column) => column.cards.map((card) => card.id)));
+  for (const column of next.columns) {
+    const added = column.cards.find((card) => !previousIds.has(card.id));
+    if (added) return added.id;
+  }
+  return null;
+}
+
+
+function uniquePositiveIds(...groups: number[][]) {
+  const ids = new Set<number>();
+  for (const group of groups) {
+    for (const value of group) {
+      const id = Number(value);
+      if (Number.isFinite(id) && id > 0) ids.add(id);
+    }
+  }
+  return Array.from(ids);
 }
 
 function shallowEqualDraft(a: CardEditorDraft | null, b: CardEditorDraft | null) {
@@ -1123,28 +1333,32 @@ function FlowchartCanvas({
     originY: number;
     moved: boolean;
   } | null>(null);
+  const panGestureRef = React.useRef<{
+    startClientX: number;
+    startClientY: number;
+    originScrollLeft: number;
+    originScrollTop: number;
+    moved: boolean;
+  } | null>(null);
   const [connectionPointer, setConnectionPointer] = React.useState<{ x: number; y: number } | null>(
     null,
   );
+  const [isPanning, setIsPanning] = React.useState(false);
 
-  const width = Math.max(980, ...flow.nodes.map((node) => node.x + 360));
-  const height = Math.max(560, ...flow.nodes.map((node) => node.y + 210));
+  const width = Math.max(1680, ...flow.nodes.map((node) => node.x + 760));
+  const height = Math.max(1480, ...flow.nodes.map((node) => node.y + 760));
   const byId = React.useMemo(
     () => new Map(flow.nodes.map((node) => [node.id, node])),
     [flow.nodes],
   );
   const outgoingCountByNode = React.useMemo(() => {
     const next = new Map<string, number>();
-    for (const edge of flow.edges) {
-      next.set(edge.source, (next.get(edge.source) || 0) + 1);
-    }
+    for (const edge of flow.edges) next.set(edge.source, (next.get(edge.source) || 0) + 1);
     return next;
   }, [flow.edges]);
   const incomingCountByNode = React.useMemo(() => {
     const next = new Map<string, number>();
-    for (const edge of flow.edges) {
-      next.set(edge.target, (next.get(edge.target) || 0) + 1);
-    }
+    for (const edge of flow.edges) next.set(edge.target, (next.get(edge.target) || 0) + 1);
     return next;
   }, [flow.edges]);
   const pendingSourceNode = pendingConnectionNodeId
@@ -1169,32 +1383,59 @@ function FlowchartCanvas({
 
     setConnectionPointer({
       x: pendingSourceNode.x + 256,
-      y: pendingSourceNode.y + 62,
+      y: pendingSourceNode.y + 76,
     });
   }, [pendingSourceNode]);
 
   React.useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
+      const panGesture = panGestureRef.current;
+      if (panGesture) {
+        const container = containerRef.current;
+        if (!container) return;
+        const dx = event.clientX - panGesture.startClientX;
+        const dy = event.clientY - panGesture.startClientY;
+        if (!panGesture.moved && Math.hypot(dx, dy) > 3) panGesture.moved = true;
+        container.scrollLeft = panGesture.originScrollLeft - dx;
+        container.scrollTop = panGesture.originScrollTop - dy;
+        return;
+      }
+
       const gesture = gestureRef.current;
       if (!gesture) return;
       const dx = event.clientX - gesture.startClientX;
       const dy = event.clientY - gesture.startClientY;
-      if (!gesture.moved && Math.hypot(dx, dy) > 4) {
-        gesture.moved = true;
-      }
+      if (!gesture.moved && Math.hypot(dx, dy) > 4) gesture.moved = true;
       if (!gesture.moved) return;
+
+      const container = containerRef.current;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const edge = 72;
+        const speed = 28;
+        if (event.clientY > rect.bottom - edge) container.scrollTop += speed;
+        if (event.clientY < rect.top + edge) container.scrollTop -= speed;
+        if (event.clientX > rect.right - edge) container.scrollLeft += speed;
+        if (event.clientX < rect.left + edge) container.scrollLeft -= speed;
+      }
+
       onMoveNode(gesture.nodeId, {
-        x: clampPosition(gesture.originX + dx, 24, width - 280),
-        y: clampPosition(gesture.originY + dy, 24, height - 130),
+        x: clampPosition(gesture.originX + dx, 32, width - 320),
+        y: clampPosition(gesture.originY + dy, 32, height - 220),
       });
     };
 
     const handlePointerUp = () => {
+      const panGesture = panGestureRef.current;
+      if (panGesture) {
+        panGestureRef.current = null;
+        setIsPanning(false);
+        return;
+      }
+
       const gesture = gestureRef.current;
       if (!gesture) return;
-      if (!gesture.moved) {
-        onSelectNode(gesture.nodeId);
-      }
+      if (!gesture.moved) onSelectNode(gesture.nodeId);
       gestureRef.current = null;
     };
 
@@ -1221,31 +1462,57 @@ function FlowchartCanvas({
           </Badge>
           {pendingSourceNode ? (
             <Badge className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-100">
-              Nova conexão em andamento
+              Escolha o destino da nova conexão
             </Badge>
           ) : null}
-        </div>
-
-        <div className="mt-3 grid gap-2 text-sm text-white/60 lg:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
-            Clique na bolinha de saída para iniciar uma conexão.
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
-            Clique na bolinha já ocupada para soltar a conexão automaticamente.
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
-            Arraste pelo próprio bloco para reposicionar sem sair do canvas.
-          </div>
         </div>
       </div>
 
       <div
         ref={containerRef}
+        onPointerDown={(event) => {
+          if (event.button !== 1) return;
+          const container = containerRef.current;
+          if (!container) return;
+          event.preventDefault();
+          panGestureRef.current = {
+            startClientX: event.clientX,
+            startClientY: event.clientY,
+            originScrollLeft: container.scrollLeft,
+            originScrollTop: container.scrollTop,
+            moved: false,
+          };
+          setIsPanning(true);
+        }}
+        onAuxClick={(event) => {
+          if (event.button === 1) event.preventDefault();
+        }}
+        onWheel={(event) => {
+          const container = containerRef.current;
+          if (!container) return;
+
+          const hasVerticalOverflow = container.scrollHeight > container.clientHeight;
+          const hasHorizontalOverflow = container.scrollWidth > container.clientWidth;
+
+          if (!hasVerticalOverflow && !hasHorizontalOverflow) return;
+
+          event.preventDefault();
+
+          if (event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+            if (hasHorizontalOverflow) container.scrollLeft += event.deltaY;
+            return;
+          }
+
+          if (hasVerticalOverflow) container.scrollTop += event.deltaY;
+          if (hasHorizontalOverflow) container.scrollLeft += event.deltaX;
+        }}
         onPointerMove={pendingSourceNode ? updateConnectionPointer : undefined}
         className={cn(
-          "relative overflow-auto bg-[radial-gradient(circle_at_top,rgba(6,182,212,0.08),transparent_35%),linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px]",
-          viewportClassName || "h-[min(76vh,820px)]",
+          "relative overflow-auto overscroll-none bg-[radial-gradient(circle_at_top,rgba(6,182,212,0.08),transparent_35%),linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px]",
+          isPanning && "cursor-grabbing select-none",
+          viewportClassName || "h-[min(78vh,900px)]",
         )}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none", touchAction: "none" }}
       >
         <div className="relative min-h-full" style={{ width, height }}>
           <svg className="pointer-events-none absolute inset-0 h-full w-full">
@@ -1275,7 +1542,7 @@ function FlowchartCanvas({
               <path
                 d={buildConnectionPath(
                   pendingSourceNode.x + 256,
-                  pendingSourceNode.y + 62,
+                  pendingSourceNode.y + 76,
                   connectionPointer.x,
                   connectionPointer.y,
                 )}
@@ -1293,8 +1560,7 @@ function FlowchartCanvas({
             const isPendingSource = node.id === pendingConnectionNodeId;
             const incomingCount = incomingCountByNode.get(node.id) || 0;
             const outgoingCount = outgoingCountByNode.get(node.id) || 0;
-            const hasIncoming = incomingCount > 0;
-            const hasOutgoing = outgoingCount > 0;
+            const sections = parseFlowContentSections(node.content);
 
             return (
               <div
@@ -1320,7 +1586,7 @@ function FlowchartCanvas({
                   }
                 }}
                 className={cn(
-                  "absolute w-64 cursor-grab overflow-hidden rounded-[1.8rem] border p-4 shadow-[0_20px_40px_rgba(0,0,0,0.28)] transition active:cursor-grabbing",
+                  "absolute w-72 cursor-grab overflow-hidden rounded-[1.8rem] border p-4 shadow-[0_20px_40px_rgba(0,0,0,0.28)] transition active:cursor-grabbing",
                   selected
                     ? "border-cyan-300/55 bg-[#10213d] ring-2 ring-cyan-300/25"
                     : "border-white/10 bg-[#0b1426]/95 hover:border-white/20",
@@ -1339,7 +1605,7 @@ function FlowchartCanvas({
                         </Badge>
                       ) : null}
                     </div>
-                    <div className="break-words text-sm font-semibold leading-5 text-white">
+                    <div className="break-words text-2xl font-black leading-tight text-white">
                       {node.title || "Bloco sem título"}
                     </div>
                   </div>
@@ -1348,54 +1614,65 @@ function FlowchartCanvas({
                   </div>
                 </div>
 
-                <div className="break-words text-sm leading-6 text-white/60">
-                  {normalizeText(node.content) || "Sem conteúdo."}
+                <div className="space-y-3">
+                  {sections.action ? (
+                    <div className="rounded-[1.3rem] border border-cyan-400/15 bg-cyan-400/[0.06] px-3 py-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                        Ação
+                      </div>
+                      <div className="mt-1 break-words text-sm leading-6 text-cyan-50/90">
+                        {sections.action}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {sections.speech ? (
+                    <div className="rounded-[1.3rem] border border-violet-400/15 bg-violet-400/[0.06] px-3 py-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-100/70">
+                        Fala
+                      </div>
+                      <div className="mt-1 break-words text-sm leading-6 text-violet-50/90">
+                        {sections.speech}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {sections.other ? (
+                    <div className="rounded-[1.3rem] border border-white/10 bg-white/[0.035] px-3 py-3">
+                      <div className="break-words text-sm leading-6 text-white/65">
+                        {sections.other}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!sections.action && !sections.speech && !sections.other ? (
+                    <div className="rounded-[1.3rem] border border-white/10 bg-white/[0.035] px-3 py-3 text-sm leading-6 text-white/55">
+                      Sem conteúdo.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <button
                     type="button"
-                    title={
-                      hasIncoming
-                        ? "Soltar conexão de entrada"
-                        : pendingSourceNode && pendingSourceNode.id !== node.id
-                          ? "Concluir conexão aqui"
-                          : "Usar como destino da conexão"
-                    }
+                    title={pendingSourceNode && pendingSourceNode.id !== node.id ? "Concluir conexão aqui" : "Selecionar entrada"}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
                       onHandleClick(node.id, "target");
                     }}
-                    className={cn(
-                      "h-4 w-4 rounded-full transition hover:scale-110",
-                      hasIncoming
-                        ? "bg-amber-300 shadow-[0_0_0_6px_rgba(251,191,36,0.16)] hover:bg-amber-200"
-                        : "bg-cyan-300/80 shadow-[0_0_0_6px_rgba(34,211,238,0.12)] hover:bg-cyan-200",
-                    )}
+                    className="h-4 w-4 rounded-full bg-cyan-300/80 shadow-[0_0_0_6px_rgba(34,211,238,0.12)] transition hover:scale-110 hover:bg-cyan-200"
                   >
                     <span className="sr-only">Entrada</span>
                   </button>
 
                   <div className="text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    {isPendingSource
-                      ? "Escolha o destino"
-                      : hasIncoming || hasOutgoing
-                        ? `${hasIncoming ? `${incomingCount} entrada` : ""}${hasIncoming && hasOutgoing ? " · " : ""}${hasOutgoing ? `${outgoingCount} saída` : ""}`
-                        : selected
-                          ? "Selecionado"
-                          : "Clique ou arraste"}
+                    {isPendingSource ? "Conexão iniciada" : `${incomingCount} entr. · ${outgoingCount} saíd.`}
                   </div>
 
                   <button
                     type="button"
-                    title={
-                      hasOutgoing
-                        ? "Soltar conexão de saída"
-                        : isPendingSource
-                          ? "Cancelar nova conexão"
-                          : "Iniciar nova conexão"
-                    }
+                    title={isPendingSource ? "Cancelar nova conexão" : "Iniciar nova conexão"}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -1403,11 +1680,9 @@ function FlowchartCanvas({
                     }}
                     className={cn(
                       "h-4 w-4 rounded-full transition hover:scale-110",
-                      hasOutgoing
-                        ? "bg-amber-300 shadow-[0_0_0_6px_rgba(251,191,36,0.16)] hover:bg-amber-200"
-                        : isPendingSource
-                          ? "bg-cyan-300 shadow-[0_0_0_6px_rgba(34,211,238,0.18)]"
-                          : "bg-violet-300/80 shadow-[0_0_0_6px_rgba(167,139,250,0.12)] hover:bg-violet-200",
+                      isPendingSource
+                        ? "bg-cyan-300 shadow-[0_0_0_6px_rgba(34,211,238,0.18)]"
+                        : "bg-violet-300/80 shadow-[0_0_0_6px_rgba(167,139,250,0.12)] hover:bg-violet-200",
                     )}
                   >
                     <span className="sr-only">Saída</span>
@@ -1421,6 +1696,7 @@ function FlowchartCanvas({
     </div>
   );
 }
+
 
 function ChecklistEditor({
   items,
@@ -1606,8 +1882,7 @@ function FlowEditorInspector({
                 : "Selecione um item"}
         </CardTitle>
         <CardDescription className="text-white/55">
-          O fluxo abre em tela cheia para o canvas ter espaço real sem competir com o resto da
-          página.
+          Edite o bloco ou a conexão selecionada.
         </CardDescription>
       </CardHeader>
 
@@ -1692,7 +1967,7 @@ function FlowEditorInspector({
         ) : (
           <EmptyState
             title="Nada selecionado"
-            description="Clique em um bloco para editar. Para conectar, use as bolinhas do próprio bloco."
+            description="Clique em um bloco para editar ou em uma linha para remover a conexão."
           />
         )}
       </CardContent>
@@ -1705,9 +1980,10 @@ export default function BobarPage() {
   const [board, setBoard] = React.useState<BobarBoard | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
-  const [activeView, setActiveView] = React.useState<BobarViewMode>("quadro");
+  const [activeView, setActiveView] = React.useState<BobarViewMode>("board");
+  const [selectedImportCardId, setSelectedImportCardId] = React.useState<number | null>(null);
+  const [hydratingImportId, setHydratingImportId] = React.useState<number | null>(null);
   const [selectedCardId, setSelectedCardId] = React.useState<number | null>(null);
-  const [selectedImportedCardId, setSelectedImportedCardId] = React.useState<number | null>(null);
   const [cardDraft, setCardDraft] = React.useState<CardEditorDraft | null>(null);
   const [baselineDraft, setBaselineDraft] = React.useState<CardEditorDraft | null>(null);
   const [checklistDraft, setChecklistDraft] = React.useState<ChecklistItem[]>([]);
@@ -1723,39 +1999,67 @@ export default function BobarPage() {
   const [columnDialog, setColumnDialog] = React.useState<ColumnDialogState | null>(null);
   const [columnNameDraft, setColumnNameDraft] = React.useState("");
   const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
+  const hydrationLocksRef = React.useRef<Set<number>>(new Set());
+  const importMetaSyncRef = React.useRef<Set<number>>(new Set());
 
-  const manualBoard = React.useMemo(
-    () => filterBoardCards(board, (card) => !isAuthorityImportCard(card)),
+
+  const allCards = React.useMemo(
+    () => board?.columns.flatMap((column) => column.cards) || [],
     [board],
   );
   const importedCards = React.useMemo(
-    () =>
-      board?.columns
-        .flatMap((column) => column.cards)
-        .filter((card) => isAuthorityImportCard(card))
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()) || [],
-    [board],
+    () => allCards.filter((card) => isAuthorityImportCard(card)),
+    [allCards],
+  );
+  const activeImportCard = React.useMemo(
+    () => importedCards.find((card) => card.id === selectedImportCardId) || importedCards[0] || null,
+    [importedCards, selectedImportCardId],
+  );
+  const activeWorkspaceColumnIds = React.useMemo(() => {
+    if (!activeImportCard || !board) return [];
+    const boardColumnIds = new Set(board.columns.map((column) => column.id));
+    return uniquePositiveIds(
+      getImportedWorkspaceColumnIds(activeImportCard),
+      inferImportedWorkspaceColumnIds(board, activeImportCard.id),
+    ).filter((columnId) => boardColumnIds.has(columnId));
+  }, [activeImportCard, board]);
+  const visibleColumns = React.useMemo(() => {
+    if (!board) return [];
+    if (activeView !== "imports" || !activeImportCard) return board.columns;
+    if (!activeWorkspaceColumnIds.length) return [];
+    const workspaceIds = new Set(activeWorkspaceColumnIds);
+    return board.columns.filter((column) => workspaceIds.has(column.id));
+  }, [activeImportCard, activeView, activeWorkspaceColumnIds, board]);
+  const cards = React.useMemo(
+    () => visibleColumns.flatMap((column) => column.cards),
+    [visibleColumns],
   );
   const selectedCard = React.useMemo(
-    () => findCard(manualBoard, selectedCardId),
-    [manualBoard, selectedCardId],
+    () => findCard(board, selectedCardId),
+    [board, selectedCardId],
   );
-  const cards = React.useMemo(
-    () => manualBoard?.columns.flatMap((column) => column.cards) || [],
-    [manualBoard],
+  const activeImportAgent = React.useMemo(
+    () => authorityAgentByKey(extractAuthorityAgentKey(activeImportCard?.source_kind)),
+    [activeImportCard?.source_kind],
   );
+  const activeImportTitle = React.useMemo(() => {
+    if (!activeImportCard) return "Roteiro importado";
+    const blueprint = buildImportedWorkspaceBlueprint(activeImportCard.content_text, activeImportCard.title);
+    return blueprint.title || activeImportCard.title;
+  }, [activeImportCard]);
+  const isImportMode = activeView === "imports";
   const selectedCardType = String(
     cardDraft?.card_type || selectedCard?.card_type || "",
   ).toLowerCase();
   const isChecklistCard = selectedCardType === "checklist";
   const isFlowCard = selectedCardType === "fluxograma";
-  const boardHasColumns = Boolean(manualBoard?.columns.length);
+  const boardHasColumns = Boolean(visibleColumns.length);
   const selectedColumn = React.useMemo(
     () =>
-      manualBoard?.columns.find(
+      visibleColumns.find(
         (column) => column.id === Number(cardDraft?.column_id ?? selectedCard?.column_id ?? 0),
       ) || null,
-    [manualBoard, cardDraft?.column_id, selectedCard?.column_id],
+    [visibleColumns, cardDraft?.column_id, selectedCard?.column_id],
   );
   const recentCards = React.useMemo(
     () =>
@@ -1786,11 +2090,11 @@ export default function BobarPage() {
 
   const columnOptions = React.useMemo<DropdownOption[]>(
     () =>
-      (manualBoard?.columns || []).map((column) => ({
+      visibleColumns.map((column) => ({
         value: String(column.id),
         label: column.name,
       })),
-    [manualBoard],
+    [visibleColumns],
   );
 
   const selectedNode = React.useMemo(
@@ -1864,11 +2168,10 @@ export default function BobarPage() {
 
   const syncSelection = React.useCallback(
     (nextBoard: BobarBoard | null, preferredCardId?: number | null) => {
-      const nextManualBoard = filterBoardCards(nextBoard, (card) => !isAuthorityImportCard(card));
       const nextId =
-        preferredCardId && findCard(nextManualBoard, preferredCardId)
+        preferredCardId && findCard(nextBoard, preferredCardId)
           ? preferredCardId
-          : firstCardId(nextManualBoard);
+          : firstCardId(nextBoard);
       setSelectedCardId(nextId);
     },
     [],
@@ -1890,21 +2193,182 @@ export default function BobarPage() {
     [syncSelection],
   );
 
+  const updateImportWorkspaceColumns = React.useCallback(
+    async (
+      boardSnapshot: BobarBoard,
+      importCardId: number,
+      columnIds: number[],
+      preferredCardId?: number | null,
+    ) => {
+      const importCard = findCard(boardSnapshot, importCardId);
+      if (!importCard) return boardSnapshot;
+
+      const normalizedColumnIds = uniquePositiveIds(columnIds);
+      const currentColumnIds = uniquePositiveIds(getImportedWorkspaceColumnIds(importCard));
+
+      const isSameColumns =
+        normalizedColumnIds.length === currentColumnIds.length &&
+        normalizedColumnIds.every((value, index) => value === currentColumnIds[index]);
+
+      if (isSameColumns) {
+        return boardSnapshot;
+      }
+
+      const nextStructureJson = writeImportedWorkspaceMeta(importCard.structure_json, {
+        version: 1,
+        title: buildImportedWorkspaceBlueprint(importCard.content_text, importCard.title).title,
+        column_ids: normalizedColumnIds,
+        created_at: new Date().toISOString(),
+      });
+
+      const nextBoard = await bobarService.updateCard(importCardId, {
+        structure_json: nextStructureJson,
+      });
+
+      setBoard(nextBoard);
+      syncSelection(nextBoard, preferredCardId ?? selectedCardId);
+      return nextBoard;
+    },
+    [selectedCardId, syncSelection],
+  );
+
+  const ensureImportWorkspace = React.useCallback(
+    async (importCard: BobarCard) => {
+      if (!board) return null;
+
+      const existingWorkspaceIds = uniquePositiveIds(
+        getImportedWorkspaceColumnIds(importCard),
+        inferImportedWorkspaceColumnIds(board, importCard.id),
+      ).filter((columnId) => board.columns.some((column) => column.id === columnId));
+
+      if (existingWorkspaceIds.length) {
+        return board;
+      }
+
+      if (hydrationLocksRef.current.has(importCard.id)) {
+        return board;
+      }
+
+      const blueprint = buildImportedWorkspaceBlueprint(importCard.content_text, importCard.title);
+      const createdColumnIds: number[] = [];
+      let preferredWorkspaceCardId: number | null = null;
+      let workingBoard = board;
+
+      try {
+        hydrationLocksRef.current.add(importCard.id);
+        setBusy(true);
+        setHydratingImportId(importCard.id);
+
+        for (const columnBlueprint of blueprint.columns) {
+          const beforeColumnCreation = workingBoard;
+          workingBoard = await bobarService.createColumn({ name: columnBlueprint.name });
+          const createdColumnId = diffNewColumnId(beforeColumnCreation, workingBoard);
+          if (!createdColumnId) {
+            throw new Error("Não foi possível identificar a nova coluna importada.");
+          }
+
+          createdColumnIds.push(createdColumnId);
+
+          for (const cardBlueprint of columnBlueprint.cards) {
+            const beforeCardCreation = workingBoard;
+            workingBoard = await bobarService.createCard({
+              ...cardBlueprint,
+              column_id: createdColumnId,
+              source_kind: buildAuthorityWorkspaceSourceKind(importCard.id),
+              source_label: importCard.source_label || "Importado",
+            });
+            preferredWorkspaceCardId = preferredWorkspaceCardId || diffNewCardId(beforeCardCreation, workingBoard);
+          }
+        }
+
+        const finalWorkspaceColumnIds = uniquePositiveIds(
+          createdColumnIds,
+          inferImportedWorkspaceColumnIds(workingBoard, importCard.id),
+        );
+
+        workingBoard = await updateImportWorkspaceColumns(
+          workingBoard,
+          importCard.id,
+          finalWorkspaceColumnIds,
+          preferredWorkspaceCardId,
+        );
+
+        const workspaceColumns = workingBoard.columns.filter((column) =>
+          finalWorkspaceColumnIds.includes(column.id),
+        );
+        setSelectedImportCardId(importCard.id);
+        syncSelection(
+          workingBoard,
+          preferredWorkspaceCardId || firstCardIdFromColumns(workspaceColumns),
+        );
+        toastSuccess("Roteiro importado montado no quadro.");
+        return workingBoard;
+      } catch (error) {
+        toastApiError(error, "Não foi possível abrir esse roteiro importado no quadro.");
+        return null;
+      } finally {
+        hydrationLocksRef.current.delete(importCard.id);
+        setBusy(false);
+        setHydratingImportId(null);
+      }
+    },
+    [board, syncSelection, updateImportWorkspaceColumns],
+  );
+
   React.useEffect(() => {
     void loadBoard();
   }, [loadBoard]);
 
   React.useEffect(() => {
     if (!importedCards.length) {
-      setSelectedImportedCardId(null);
+      setSelectedImportCardId(null);
+      if (activeView === "imports") setActiveView("board");
       return;
     }
 
-    setSelectedImportedCardId((current) =>
-      current && importedCards.some((card) => card.id === current) ? current : importedCards[0]?.id || null,
-    );
-  }, [importedCards]);
+    if (!selectedImportCardId || !importedCards.some((card) => card.id === selectedImportCardId)) {
+      setSelectedImportCardId(importedCards[0].id);
+    }
+  }, [activeView, importedCards, selectedImportCardId]);
 
+  React.useEffect(() => {
+    if (!board || !activeImportCard || loading) return;
+    const inferredColumnIds = inferImportedWorkspaceColumnIds(board, activeImportCard.id);
+    if (!inferredColumnIds.length) return;
+    if (getImportedWorkspaceColumnIds(activeImportCard).length) return;
+    if (importMetaSyncRef.current.has(activeImportCard.id)) return;
+
+    importMetaSyncRef.current.add(activeImportCard.id);
+    void updateImportWorkspaceColumns(board, activeImportCard.id, inferredColumnIds, selectedCardId).finally(() => {
+      importMetaSyncRef.current.delete(activeImportCard.id);
+    });
+  }, [activeImportCard, board, loading, selectedCardId, updateImportWorkspaceColumns]);
+
+  React.useEffect(() => {
+    if (!isImportMode || !activeImportCard || loading) return;
+    if (hydratingImportId === activeImportCard.id) return;
+    if (hydrationLocksRef.current.has(activeImportCard.id)) return;
+    if (activeWorkspaceColumnIds.length) return;
+    void ensureImportWorkspace(activeImportCard);
+  }, [
+    activeImportCard,
+    activeWorkspaceColumnIds.length,
+    ensureImportWorkspace,
+    hydratingImportId,
+    isImportMode,
+    loading,
+  ]);
+
+  React.useEffect(() => {
+    if (!cards.length) {
+      setSelectedCardId(null);
+      return;
+    }
+
+    if (!selectedCardId || !cards.some((card) => card.id === selectedCardId)) {
+      setSelectedCardId(cards[0].id);
+    }
+  }, [cards, selectedCardId]);
 
   React.useEffect(() => {
     if (!selectedCard) {
@@ -1986,6 +2450,35 @@ export default function BobarPage() {
       if (!name || !columnDialog) return;
 
       if (columnDialog.mode === "create") {
+        if (isImportMode && activeImportCard && board) {
+          try {
+            setBusy(true);
+            const createdBoard = await bobarService.createColumn({ name });
+            const createdColumnId = diffNewColumnId(board, createdBoard);
+            if (!createdColumnId) {
+              throw new Error("Não foi possível identificar a nova coluna criada.");
+            }
+
+            const nextColumnIds = [...activeWorkspaceColumnIds, createdColumnId];
+            const syncedBoard = await updateImportWorkspaceColumns(
+              createdBoard,
+              activeImportCard.id,
+              nextColumnIds,
+              selectedCardId,
+            );
+
+            setColumnDialog(null);
+            setColumnNameDraft("");
+            setBoard(syncedBoard);
+            toastSuccess("Coluna criada dentro do roteiro importado.");
+          } catch (error) {
+            toastApiError(error, "Não foi possível criar a nova coluna.");
+          } finally {
+            setBusy(false);
+          }
+          return;
+        }
+
         const nextBoard = await runBoardMutation(
           () => bobarService.createColumn({ name }),
           "Coluna criada.",
@@ -2012,7 +2505,17 @@ export default function BobarPage() {
         setColumnNameDraft("");
       }
     },
-    [columnDialog, columnNameDraft, runBoardMutation],
+    [
+      activeImportCard,
+      activeWorkspaceColumnIds,
+      board,
+      columnDialog,
+      columnNameDraft,
+      isImportMode,
+      runBoardMutation,
+      selectedCardId,
+      updateImportWorkspaceColumns,
+    ],
   );
 
   const handleDeleteColumn = React.useCallback((column: BobarColumn) => {
@@ -2021,7 +2524,7 @@ export default function BobarPage() {
 
   const handleCreateCard = React.useCallback(
     async (columnId?: number) => {
-      const fallbackColumnId = columnId || manualBoard?.columns[0]?.id;
+      const fallbackColumnId = columnId || visibleColumns[0]?.id;
       if (!fallbackColumnId) {
         toastInfo("Crie uma coluna antes de adicionar cards.");
         return;
@@ -2039,7 +2542,67 @@ export default function BobarPage() {
         "Card criado.",
       );
     },
-    [manualBoard, runBoardMutation],
+    [runBoardMutation, visibleColumns],
+  );
+
+  const handleCleanupImportDuplicates = React.useCallback(async () => {
+    if (!activeImportCard) {
+      toastInfo("Selecione um roteiro importado para limpar os duplicados.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const nextBoard = await bobarService.cleanupImportDuplicates(activeImportCard.id);
+      setBoard(nextBoard);
+      setSelectedImportCardId(activeImportCard.id);
+
+      const nextImportCard = findCard(nextBoard, activeImportCard.id);
+      const nextWorkspaceIds = nextImportCard
+        ? uniquePositiveIds(
+            getImportedWorkspaceColumnIds(nextImportCard),
+            inferImportedWorkspaceColumnIds(nextBoard, activeImportCard.id),
+          ).filter((columnId) => nextBoard.columns.some((column) => column.id === columnId))
+        : [];
+
+      const nextWorkspaceColumns = nextBoard.columns.filter((column) =>
+        nextWorkspaceIds.includes(column.id),
+      );
+
+      syncSelection(
+        nextBoard,
+        firstCardIdFromColumns(nextWorkspaceColumns) || selectedCardId,
+      );
+
+      toastSuccess("Limpeza segura concluída. Os duplicados antigos foram removidos.");
+    } catch (error) {
+      toastApiError(error, "Não foi possível limpar os duplicados antigos.");
+    } finally {
+      setBusy(false);
+    }
+  }, [activeImportCard, selectedCardId, syncSelection]);
+
+
+  const handleSetImportProgressStatus = React.useCallback(
+    async (card: BobarCard, status: ImportProgressStatus) => {
+      if (readImportProgressStatus(card.structure_json) === status) return;
+
+      try {
+        setBusy(true);
+        const nextBoard = await bobarService.updateCard(card.id, {
+          structure_json: writeImportProgressStatus(card.structure_json, status),
+        });
+        setBoard(nextBoard);
+        setSelectedImportCardId(card.id);
+        syncSelection(nextBoard, selectedCardId);
+        toastSuccess(`Status atualizado para ${formatImportProgressLabel(status)}.`);
+      } catch (error) {
+        toastApiError(error, "Não foi possível atualizar o status da base importada.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedCardId, syncSelection],
   );
 
   const handleStartDragCard = React.useCallback(
@@ -2063,7 +2626,7 @@ export default function BobarPage() {
       setDragOverColumnId(null);
       if (!drag) return;
 
-      const targetColumn = board?.columns.find((column) => column.id === columnId);
+      const targetColumn = visibleColumns.find((column) => column.id === columnId);
       if (
         !targetColumn ||
         (drag.fromColumnId === columnId &&
@@ -2081,7 +2644,7 @@ export default function BobarPage() {
         drag.cardId,
       );
     },
-    [board, dragState, runBoardMutation],
+    [dragState, runBoardMutation, visibleColumns],
   );
 
   const handleSaveCard = React.useCallback(async () => {
@@ -2136,6 +2699,49 @@ export default function BobarPage() {
     if (!deleteDialog) return;
 
     if (deleteDialog.type === "column") {
+      if (isImportMode && activeImportCard && board) {
+        const targetColumnId = deleteDialog.column.id;
+        const remainingWorkspaceColumns = visibleColumns.filter((column) => column.id !== targetColumnId);
+
+        if (!remainingWorkspaceColumns.length) {
+          toastInfo("Mantenha pelo menos uma coluna no roteiro importado.");
+          return;
+        }
+
+        try {
+          setBusy(true);
+          let workingBoard = board;
+          const destinationColumnId = remainingWorkspaceColumns[0].id;
+          const sourceColumn = workingBoard.columns.find((column) => column.id === targetColumnId) || null;
+
+          for (const card of sourceColumn?.cards || []) {
+            workingBoard = await bobarService.moveCard(card.id, {
+              column_id: destinationColumnId,
+              position:
+                (workingBoard.columns.find((column) => column.id === destinationColumnId)?.cards.length || 0),
+            });
+          }
+
+          workingBoard = await bobarService.deleteColumn(targetColumnId);
+          const nextWorkspaceColumnIds = activeWorkspaceColumnIds.filter((columnId) => columnId !== targetColumnId);
+          workingBoard = await updateImportWorkspaceColumns(
+            workingBoard,
+            activeImportCard.id,
+            nextWorkspaceColumnIds,
+            selectedCardId,
+          );
+
+          setDeleteDialog(null);
+          setBoard(workingBoard);
+          toastSuccess("Coluna removida do roteiro importado.");
+        } catch (error) {
+          toastApiError(error, "Não foi possível remover a coluna importada.");
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+
       const nextBoard = await runBoardMutation(
         () => bobarService.deleteColumn(deleteDialog.column.id),
         "Coluna removida.",
@@ -2150,7 +2756,17 @@ export default function BobarPage() {
       "Card removido.",
     );
     if (nextBoard) setDeleteDialog(null);
-  }, [deleteDialog, runBoardMutation]);
+  }, [
+    activeImportCard,
+    activeWorkspaceColumnIds,
+    board,
+    deleteDialog,
+    isImportMode,
+    runBoardMutation,
+    selectedCardId,
+    updateImportWorkspaceColumns,
+    visibleColumns,
+  ]);
 
   const applyTemplateByKey = React.useCallback((nextTemplateKey: string) => {
     if (!nextTemplateKey) {
@@ -2336,37 +2952,22 @@ export default function BobarPage() {
       setSelectedEdgeId(null);
 
       if (role === "source") {
-        const hasOutgoing = base.edges.some((edge) => edge.source === nodeId);
-        if (hasOutgoing) {
-          setFlowDraft({
-            ...base,
-            edges: base.edges.filter((edge) => edge.source !== nodeId),
-          });
-          setPendingConnectionNodeId(nodeId);
-          return;
-        }
-
         setPendingConnectionNodeId((current) => (current === nodeId ? null : nodeId));
-        if (!flowDraft) {
-          setFlowDraft(base);
-        }
-        return;
-      }
-
-      const hasIncoming = base.edges.some((edge) => edge.target === nodeId);
-      if (hasIncoming) {
-        setFlowDraft({
-          ...base,
-          edges: base.edges.filter((edge) => edge.target !== nodeId),
-        });
+        if (!flowDraft) setFlowDraft(base);
         return;
       }
 
       if (!pendingConnectionNodeId || pendingConnectionNodeId === nodeId) {
         setPendingConnectionNodeId(null);
-        if (!flowDraft) {
-          setFlowDraft(base);
-        }
+        if (!flowDraft) setFlowDraft(base);
+        return;
+      }
+
+      const duplicated = base.edges.some(
+        (edge) => edge.source === pendingConnectionNodeId && edge.target === nodeId,
+      );
+      if (duplicated) {
+        setPendingConnectionNodeId(null);
         return;
       }
 
@@ -2379,12 +2980,7 @@ export default function BobarPage() {
 
       setFlowDraft({
         ...base,
-        edges: dedupeEdges([
-          ...base.edges.filter(
-            (edge) => edge.source !== pendingConnectionNodeId && edge.target !== nodeId,
-          ),
-          createdEdge,
-        ]),
+        edges: dedupeEdges([...base.edges, createdEdge]),
       });
       setSelectedEdgeId(createdEdge.id);
       setPendingConnectionNodeId(null);
@@ -2458,7 +3054,7 @@ export default function BobarPage() {
   const handleAutoArrange = React.useCallback(() => {
     setFlowDraft((current) => (current ? autoArrangeFlow(current) : current));
     setPendingConnectionNodeId(null);
-    toastSuccess("Fluxograma reorganizado.");
+    toastSuccess("Fluxograma reorganizado em ordem de fluxo.");
   }, []);
 
   const handleExportText = React.useCallback(() => {
@@ -2545,7 +3141,7 @@ export default function BobarPage() {
                         {cardDraft?.title?.trim() || selectedCard?.title || "Fluxograma"}
                       </div>
                       <div className="text-sm text-white/55">
-                        Modo aplicativo. O editor ocupa a viewport inteira e cobre até a barra lateral.
+                        Edite blocos e conexões no canvas.
                       </div>
                     </div>
                   </div>
@@ -2640,43 +3236,59 @@ export default function BobarPage() {
       : null;
 
   const selectedTemplate = CARD_TEMPLATES.find((template) => template.key === templateKey) || null;
+  const ActiveImportIcon = activeImportAgent?.Icon || AUTHORITY_AGENTS[0]?.Icon;
 
   return (
     <div className="min-h-screen bg-[#020611] px-4 py-6 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1560px] flex-col gap-6">
+      <div className="mx-auto flex max-w-[1820px] flex-col gap-6">
         <Card
           variant="glass"
           className="overflow-hidden rounded-[2.4rem] border-cyan-400/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_28%),#040914]"
         >
-          <CardHeader className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_520px] xl:items-start">
-            <div className="max-w-4xl">
+          <CardHeader className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_560px] xl:items-start">
+            <div className="max-w-5xl">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-400/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-100">
                 <Sparkles className="h-4 w-4" />
-                Bobar · fluxo operacional
+                Bobar · quadro premium
               </div>
-              <CardTitle className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl">
-                Organize cards, roteiros e fluxogramas com clareza desde o primeiro acesso.
+              <CardTitle className="max-w-4xl text-4xl font-black tracking-tight text-white sm:text-5xl">
+                {isImportMode
+                  ? "Abra uma base importada e toque a execução no mesmo quadro do Bobar."
+                  : "Organize cards, roteiros e fluxogramas com clareza desde o primeiro acesso."}
               </CardTitle>
-              <CardDescription className="mt-4 max-w-2xl text-base leading-8 text-white/65">
-                O foco aqui é reduzir ruído: quadro visual previsível, edição contextual e
-                fluxograma que ensina o uso enquanto a pessoa trabalha.
+              <CardDescription className="mt-4 max-w-3xl text-base leading-8 text-white/65">
+                {isImportMode
+                  ? "Selecione a base importada, marque o estágio e abra o quadro sem cards estáticos nem telas paralelas."
+                  : "O foco aqui é reduzir ruído: quadro visual previsível, edição contextual e fluxograma que ensina o uso enquanto a pessoa trabalha."}
               </CardDescription>
 
               <div className="mt-6 grid gap-3 lg:grid-cols-3">
                 <GuideStep
                   step="01"
-                  title="Monte a estrutura"
-                  description="Crie colunas que representem etapa, status ou área de trabalho. Isso já deixa o quadro legível para quem acabou de entrar."
+                  title={isImportMode ? "Escolha a base" : "Monte a estrutura"}
+                  description={
+                    isImportMode
+                      ? "Selecione um roteiro importado. A base vira colunas editáveis no quadro, em vez de ficar presa num card único."
+                      : "Crie colunas que representem etapa, status ou área de trabalho. Isso já deixa o quadro legível para quem acabou de entrar."
+                  }
                 />
                 <GuideStep
                   step="02"
-                  title="Abasteça com cards"
-                  description="Use cards para roteiros, checklists, ideias e materiais operacionais. Tudo fica com o mesmo padrão visual e de edição."
+                  title={isImportMode ? "Edite no quadro" : "Abasteça com cards"}
+                  description={
+                    isImportMode
+                      ? "O conteúdo importado usa os mesmos cards do Bobar: checklist, conteúdo e fluxograma."
+                      : "Use cards para roteiros, checklists, ideias e materiais operacionais. Tudo fica com o mesmo padrão visual e de edição."
+                  }
                 />
                 <GuideStep
                   step="03"
-                  title="Desenhe o fluxo"
-                  description="Quando precisar de processo, transforme o card em fluxograma e conecte os blocos por clique, sem menus escondidos."
+                  title={isImportMode ? "Expanda sem travar" : "Desenhe o fluxo"}
+                  description={
+                    isImportMode
+                      ? "Crie novas colunas, reorganize a execução e refine o fluxograma segundo a segundo sem sair dessa tela."
+                      : "Quando precisar de processo, transforme o card em fluxograma e conecte os blocos por clique, sem menus escondidos."
+                  }
                 />
               </div>
             </div>
@@ -2686,7 +3298,7 @@ export default function BobarPage() {
                 <StatChip
                   icon={<FilePlus2 className="h-5 w-5" />}
                   label="Cards"
-                  value={cards.length}
+                  value={board?.total_cards || 0}
                 />
                 <StatChip
                   icon={<Sparkles className="h-5 w-5" />}
@@ -2708,96 +3320,78 @@ export default function BobarPage() {
               <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.035] p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-white">Ações principais</div>
+                    <div className="text-sm font-semibold text-white">Modo de trabalho</div>
                     <div className="mt-1 text-sm leading-6 text-white/55">
-                      {activeView === "quadro"
-                        ? "Comece pela estrutura do quadro e depois avance para os cards."
-                        : "Entre em Importados para abrir roteiros prontos, ver o agente de origem e produzir com tudo organizado."}
+                      Alterne entre o quadro geral e os roteiros importados sem perder contexto.
                     </div>
                   </div>
-                  {activeView === "quadro" && selectedCard ? (
+                  {selectedCard ? (
                     <Badge className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
                       Editando agora
-                    </Badge>
-                  ) : activeView === "importados" ? (
-                    <Badge className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
-                      Importados ativos
                     </Badge>
                   ) : null}
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <div className="inline-flex rounded-[1.4rem] border border-white/10 bg-[#091426] p-1">
-                    <button
-                      type="button"
-                      onClick={() => setActiveView("quadro")}
-                      className={cn(
-                        "inline-flex h-10 items-center justify-center rounded-[1rem] px-4 text-sm font-semibold transition",
-                        activeView === "quadro"
-                          ? "bg-cyan-400/15 text-cyan-100"
-                          : "text-white/55 hover:text-white",
-                      )}
+                  <Button
+                    className="h-12 rounded-2xl px-6"
+                    variant={activeView === "board" ? "default" : "outline"}
+                    onClick={() => setActiveView("board")}
+                  >
+                    <FolderKanban className="h-4 w-4" />
+                    Quadro
+                  </Button>
+                  <Button
+                    className="h-12 rounded-2xl px-6"
+                    variant={activeView === "imports" ? "default" : "outline"}
+                    onClick={() => setActiveView("imports")}
+                  >
+                    <Inbox className="h-4 w-4" />
+                    Importados
+                  </Button>
+                  <Button
+                    className="h-12 rounded-2xl px-6"
+                    onClick={openCreateColumnDialog}
+                    disabled={busy || (isImportMode && !activeImportCard)}
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    Criar coluna
+                  </Button>
+                  <Button
+                    className="h-12 rounded-2xl px-6"
+                    variant="outline"
+                    onClick={() => void handleCreateCard()}
+                    disabled={busy || !boardHasColumns}
+                  >
+                    <FilePlus2 className="h-4 w-4" />
+                    Novo card
+                  </Button>
+                  {isImportMode ? (
+                    <Button
+                      className="h-12 rounded-2xl px-6"
+                      variant="outline"
+                      onClick={() => void handleCleanupImportDuplicates()}
+                      disabled={busy || !activeImportCard}
                     >
-                      Quadro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveView("importados")}
-                      className={cn(
-                        "inline-flex h-10 items-center justify-center rounded-[1rem] px-4 text-sm font-semibold transition",
-                        activeView === "importados"
-                          ? "bg-cyan-400/15 text-cyan-100"
-                          : "text-white/55 hover:text-white",
-                      )}
-                    >
-                      Importados
-                    </button>
-                  </div>
-
-                  {activeView === "quadro" ? (
-                    <>
-                      <Button
-                        className="h-12 rounded-2xl px-6"
-                        onClick={openCreateColumnDialog}
-                        disabled={busy}
-                      >
-                        <Columns3 className="h-4 w-4" />
-                        Criar coluna
-                      </Button>
-                      <Button
-                        className="h-12 rounded-2xl px-6"
-                        variant="outline"
-                        onClick={() => void handleCreateCard()}
-                        disabled={busy || !boardHasColumns}
-                      >
-                        <FilePlus2 className="h-4 w-4" />
-                        Novo card
-                      </Button>
-                    </>
+                      <Trash2 className="h-4 w-4" />
+                      Limpar duplicados
+                    </Button>
                   ) : null}
-
-                  <div className="flex min-h-12 flex-1 items-center rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 text-sm text-white/60">
-                    {activeView === "quadro" ? (
-                      selectedCard ? (
-                        <span className="truncate">
-                          Card selecionado:{" "}
-                          <span className="font-semibold text-white">{selectedCard.title}</span>
-                        </span>
-                      ) : boardHasColumns ? (
-                        "Selecione um card no quadro para abrir o editor."
-                      ) : (
-                        "Crie a primeira coluna para começar a montar o quadro."
-                      )
-                    ) : importedCards.length ? (
+                  <div className="flex min-h-12 min-w-[280px] flex-1 items-center rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 text-sm text-white/60">
+                    {isImportMode && activeImportCard ? (
                       <span className="truncate">
-                        Importado selecionado:{" "}
-                        <span className="font-semibold text-white">
-                          {importedCards.find((card) => card.id === selectedImportedCardId)?.title ||
-                            importedCards[0]?.title}
-                        </span>
+                        Importado ativo:{" "}
+                        <span className="font-semibold text-white">{activeImportTitle}</span>
                       </span>
+                    ) : selectedCard ? (
+                      <span className="truncate">
+                        Card selecionado:{" "}
+                        <span className="font-semibold text-white">{selectedCard.title}</span>
+                      </span>
+                    ) : boardHasColumns ? (
+                      "Selecione um card no quadro para abrir o editor."
                     ) : (
-                      "Ainda não existem roteiros importados no Bobar."
+                      "Crie a primeira coluna para começar a montar o quadro."
                     )}
                   </div>
                 </div>
@@ -2806,40 +3400,179 @@ export default function BobarPage() {
           </CardHeader>
         </Card>
 
-        {activeView === "importados" ? (
-          loading ? (
+        {activeView === "imports" ? (
+          <div className="grid gap-6">
             <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
-              <CardContent className="flex min-h-[240px] items-center justify-center">
-                <Loader2 className="h-7 w-7 animate-spin text-cyan-200" />
+              <CardHeader>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                  Importados
+                </div>
+                <CardTitle className="text-3xl font-black text-white">
+                  Escolha a base do quadro
+                </CardTitle>
+                <CardDescription className="max-w-3xl text-white/55">
+                  Escolha a base que vai abrir no quadro e acompanhe o estágio de execução de cada importação.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {importedCards.length ? (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {importedCards.map((card) => {
+                      const agent = authorityAgentByKey(extractAuthorityAgentKey(card.source_kind));
+                      const AgentIcon = agent?.Icon || AUTHORITY_AGENTS[0]?.Icon;
+                      const title = buildImportedWorkspaceBlueprint(card.content_text, card.title).title;
+                      const ready = getImportedWorkspaceColumnIds(card).length > 0;
+                      const status = readImportProgressStatus(card.structure_json);
+
+                      return (
+                        <div
+                          key={card.id}
+                          className={cn(
+                            "rounded-[1.8rem] border p-4 transition",
+                            activeImportCard?.id === card.id
+                              ? "border-cyan-400/35 bg-cyan-400/10 ring-2 ring-cyan-400/20"
+                              : "border-white/10 bg-white/[0.03]",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedImportCardId(card.id)}
+                            className="w-full text-left"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.25rem] bg-cyan-400/10 text-cyan-100">
+                                {AgentIcon ? <AgentIcon className="h-11 w-11" /> : <Sparkles className="h-5 w-5" />}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                  <Badge className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]", importProgressBadgeClasses(status))}>
+                                    {formatImportProgressLabel(status)}
+                                  </Badge>
+                                  <Badge className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                                    {hydratingImportId === card.id ? "Montando" : ready ? "Pronto" : "Importado"}
+                                  </Badge>
+                                </div>
+                                <div className="truncate text-sm font-semibold text-cyan-100">
+                                  {card.source_label || agent?.name || "Agente"}
+                                </div>
+                                <div className="mt-1 break-words text-2xl font-black leading-tight text-white">
+                                  {title}
+                                </div>
+                                <div className="mt-2 text-sm text-white/45">{formatDate(card.updated_at)}</div>
+                              </div>
+                            </div>
+                          </button>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {IMPORT_PROGRESS_OPTIONS.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleSetImportProgressStatus(card, option.value);
+                                }}
+                                disabled={busy}
+                                className={cn(
+                                  "rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-60",
+                                  importProgressButtonClasses(status === option.value, option.value),
+                                )}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="Nenhum roteiro importado ainda"
+                    description="Quando a pessoa clicar em Mandar pro Bobar, a base importada aparece aqui pronta para virar um quadro editável."
+                  />
+                )}
               </CardContent>
             </Card>
-          ) : (
-            <BobarImportsPanel
-              cards={importedCards}
-              selectedCardId={selectedImportedCardId}
-              onSelectCard={setSelectedImportedCardId}
-            />
-          )
-        ) : (
-        <>
+
+            <Card variant="glass" className="hidden rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
+              <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.6rem] bg-cyan-400/10 text-cyan-100">
+                    {ActiveImportIcon ? <ActiveImportIcon className="h-12 w-12" /> : <Sparkles className="h-6 w-6" />}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                      Importado no quadro
+                    </div>
+                    <CardTitle className="mt-2 max-w-4xl break-words text-3xl font-black text-white sm:text-4xl">
+                      {activeImportTitle}
+                    </CardTitle>
+                    <CardDescription className="mt-2 text-base leading-7 text-white/60">
+                      {activeImportCard
+                        ? `${activeImportCard.source_label || activeImportAgent?.name || "Agente"} · atualizado em ${formatDate(activeImportCard.updated_at)}`
+                        : "Selecione um roteiro importado para abrir a base no quadro visual."}
+                    </CardDescription>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                    3 colunas-base
+                  </Badge>
+                  <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                    Fluxograma editável
+                  </Badge>
+                  <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                    Mesmo quadro do Bobar
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-5">
+                  <div className="text-base font-semibold text-white">
+                    A base importada agora abre como quadro real, não como card estático.
+                  </div>
+                  <div className="mt-3 text-sm leading-7 text-white/60">
+                    Cada seção vira card editável nas colunas certas. O roteiro segundo a segundo já entra como fluxograma do Bobar, então a pessoa pode ajustar blocos, conexões e ordem sem refazer tudo.
+                  </div>
+                </div>
+
+                <div className="rounded-[1.9rem] border border-cyan-400/15 bg-cyan-400/[0.07] p-5 text-sm leading-7 text-cyan-50/90">
+                  {hydratingImportId && activeImportCard?.id === hydratingImportId
+                    ? "Montando as colunas e os cards importados agora. Assim que terminar, o quadro fica pronto para edição."
+                    : activeImportCard
+                      ? activeWorkspaceColumnIds.length
+                        ? "Quadro importado pronto. Você já pode editar cards, criar novas colunas e ajustar o fluxograma."
+                        : "Clique no roteiro para o Bobar materializar a base em colunas reais."
+                      : "Selecione um roteiro importado para começar."}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+
         <Card variant="glass" className="rounded-[2.2rem] border-cyan-400/10 bg-[#040914]">
           <CardHeader className="gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
-                Quadro visual
+                {isImportMode ? "Quadro importado" : "Quadro visual"}
               </div>
               <CardTitle className="mt-2 text-3xl font-black text-white">
-                Cards organizados por coluna
+                {isImportMode ? activeImportTitle : "Cards organizados por coluna"}
               </CardTitle>
-              <CardDescription className="mt-2 max-w-3xl text-white/55">
-                O quadro precisa ser escaneável em segundos. Clique para editar, arraste para mover
-                e use os botões da própria coluna para ajustes estruturais.
+              <CardDescription className="mt-2 max-w-4xl text-white/55">
+                {isImportMode
+                  ? "Agora essa base roda no mesmo quadro visual do Bobar. Arraste cards, crie novas colunas, edite checklists e abra o roteiro segundo a segundo no fluxograma."
+                  : "O quadro precisa ser escaneável em segundos. Clique para editar, arraste para mover e use os botões da própria coluna para ajustes estruturais."}
               </CardDescription>
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
-                {manualBoard?.columns.length || 0} colunas
+                {visibleColumns.length || 0} colunas
               </Badge>
               <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
                 {cards.length} cards
@@ -2853,14 +3586,17 @@ export default function BobarPage() {
           </CardHeader>
 
           <CardContent>
-            {loading ? (
-              <div className="flex min-h-[240px] items-center justify-center">
+            {loading || (isImportMode && hydratingImportId === activeImportCard?.id && !visibleColumns.length) ? (
+              <div className="flex min-h-[260px] flex-col items-center justify-center gap-3">
                 <Loader2 className="h-7 w-7 animate-spin text-cyan-200" />
+                <div className="text-sm text-white/55">
+                  {isImportMode ? "Montando o quadro importado..." : "Carregando Bobar..."}
+                </div>
               </div>
-            ) : manualBoard?.columns.length ? (
+            ) : visibleColumns.length ? (
               <div className="overflow-x-auto pb-4">
-                <div className="flex min-w-max snap-x snap-mandatory gap-4">
-                  {manualBoard?.columns.map((column) => (
+                <div className="flex min-w-max gap-5">
+                  {visibleColumns.map((column) => (
                     <ColumnLane
                       key={column.id}
                       column={column}
@@ -2884,13 +3620,20 @@ export default function BobarPage() {
             ) : (
               <div className="space-y-5">
                 <EmptyState
-                  title="Nenhuma coluna criada ainda"
-                  description="Comece criando a primeira coluna do fluxo. Isso organiza o quadro e evita uma tela vazia sem direção para quem está acessando pela primeira vez."
+                  title={isImportMode ? "Escolha um roteiro importado" : "Nenhuma coluna criada ainda"}
+                  description={
+                    isImportMode
+                      ? "Selecione um item em Importados para o Bobar abrir a base nas 3 colunas editáveis e no fluxograma."
+                      : "Comece criando a primeira coluna do fluxo. Isso organiza o quadro e evita uma tela vazia sem direção para quem está acessando pela primeira vez."
+                  }
                 />
                 <div className="flex justify-center">
-                  <Button className="h-12 rounded-2xl px-6" onClick={openCreateColumnDialog}>
-                    <Columns3 className="h-4 w-4" />
-                    Criar primeira coluna
+                  <Button
+                    className="h-12 rounded-2xl px-6"
+                    onClick={isImportMode ? () => setActiveView("imports") : openCreateColumnDialog}
+                  >
+                    {isImportMode ? <Inbox className="h-4 w-4" /> : <Columns3 className="h-4 w-4" />}
+                    {isImportMode ? "Ver importados" : "Criar primeira coluna"}
                   </Button>
                 </div>
               </div>
@@ -2898,7 +3641,7 @@ export default function BobarPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card
             id="bobar-editor"
             variant="glass"
@@ -2970,7 +3713,7 @@ export default function BobarPage() {
                     </div>
                   ) : null}
 
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_320px]">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
                     <div className="space-y-2">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                         Título do card
@@ -3353,8 +4096,6 @@ export default function BobarPage() {
             </Card>
           </div>
         </div>
-        </>
-        )}
       </div>
 
       {flowEditorOverlay}

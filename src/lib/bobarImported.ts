@@ -1,5 +1,4 @@
-
-import type { BobarCard, BobarFlowchart, CreateBobarCardIn } from "@/services/bobar";
+import type { BobarBoard, BobarCard, BobarFlowchart, CreateBobarCardIn } from "@/services/bobar";
 
 export type ImportedTimelineItem = {
   tempo: string;
@@ -19,15 +18,32 @@ export type ImportedScriptPayload = {
   legenda: string;
 };
 
+export type ImportedWorkspaceMeta = {
+  version: number;
+  title: string;
+  column_ids: number[];
+  created_at?: string;
+};
+
+export type ImportedWorkspaceCardDraft = Omit<CreateBobarCardIn, "column_id">;
+
+export type ImportedWorkspaceColumnDraft = {
+  name: string;
+  cards: ImportedWorkspaceCardDraft[];
+};
+
+export type ImportedWorkspaceBlueprint = {
+  title: string;
+  columns: ImportedWorkspaceColumnDraft[];
+};
+
 function safeText(value: unknown): string {
   return String(value ?? "").replace(/\r\n?/g, "\n").trim();
 }
 
 function safeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => safeText(item))
-    .filter(Boolean);
+  return value.map((item) => safeText(item)).filter(Boolean);
 }
 
 function safeTimeline(value: unknown): ImportedTimelineItem[] {
@@ -37,10 +53,14 @@ function safeTimeline(value: unknown): ImportedTimelineItem[] {
     .map((item, index) => {
       if (item && typeof item === "object") {
         const record = item as Record<string, unknown>;
+        const tempo = safeText(record.tempo || record.time || record.etapa || `Trecho ${index + 1}`);
+        const acao = safeText(record.acao || record.action);
+        const fala = safeText(record.fala || record.speech || record.text);
+        if (!tempo && !acao && !fala) return null;
         return {
-          tempo: safeText(record.tempo || record.time || `Trecho ${index + 1}`),
-          acao: safeText(record.acao || record.action),
-          fala: safeText(record.fala || record.speech || record.text),
+          tempo: tempo || `Trecho ${index + 1}`,
+          acao,
+          fala,
         };
       }
 
@@ -125,10 +145,10 @@ export function parseImportedScriptPayload(
 export function isAuthorityImportSourceKind(sourceKind?: string | null): boolean {
   const normalized = safeText(sourceKind).toLowerCase();
   return (
-    normalized === "authority_agent" ||
     normalized === "authority_agent_import" ||
-    normalized.startsWith("authority_agent:") ||
-    normalized.startsWith("authority_agent_import:")
+    normalized.startsWith("authority_agent_import:") ||
+    normalized === "authority_agent" ||
+    normalized.startsWith("authority_agent:")
   );
 }
 
@@ -143,12 +163,66 @@ export function isAuthorityImportCard(card?: Pick<BobarCard, "source_kind"> | nu
   return isAuthorityImportSourceKind(card?.source_kind);
 }
 
+
+export function buildAuthorityWorkspaceSourceKind(importCardId: number | string): string {
+  return `authority_agent_workspace:${Number(importCardId) || 0}`;
+}
+
+export function isAuthorityWorkspaceSourceKind(sourceKind?: string | null): boolean {
+  const normalized = safeText(sourceKind).toLowerCase();
+  return normalized.startsWith("authority_agent_workspace:");
+}
+
+export function extractAuthorityWorkspaceImportId(sourceKind?: string | null): number | null {
+  const normalized = safeText(sourceKind);
+  const match = normalized.match(/^authority_agent_workspace:(\d+)$/i);
+  const value = Number(match?.[1] || 0);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+export function inferImportedWorkspaceColumnIds(
+  board: Pick<BobarBoard, "columns"> | null | undefined,
+  importCardId: number,
+): number[] {
+  if (!board || !Number.isFinite(importCardId) || importCardId <= 0) return [];
+
+  const ids = new Set<number>();
+
+  for (const column of board.columns || []) {
+    const hasWorkspaceCard = (column.cards || []).some(
+      (card) => extractAuthorityWorkspaceImportId(card.source_kind) === importCardId,
+    );
+
+    if (hasWorkspaceCard && Number.isFinite(column.id) && column.id > 0) {
+      ids.add(column.id);
+    }
+  }
+
+  return Array.from(ids);
+}
+
 function newNodeId() {
   return `node-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function newEdgeId() {
   return `edge-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function toChecklistContent(items: string[]) {
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
+function toTimelineText(items: ImportedTimelineItem[]) {
+  return items
+    .map((item, index) => {
+      const title = safeText(item.tempo) || `Trecho ${index + 1}`;
+      const parts = [title];
+      if (safeText(item.acao)) parts.push(`Ação: ${safeText(item.acao)}`);
+      if (safeText(item.fala)) parts.push(`Fala: ${safeText(item.fala)}`);
+      return parts.join("\n");
+    })
+    .join("\n\n");
 }
 
 export function buildImportedFlowchart(script: ImportedScriptPayload): BobarFlowchart {
@@ -168,8 +242,8 @@ export function buildImportedFlowchart(script: ImportedScriptPayload): BobarFlow
           : index === script.roteiro_segundo_a_segundo.length - 1
             ? "cta"
             : "timeline",
-      x: 80,
-      y: 80 + index * 180,
+      x: 110 + (index % 2) * 320,
+      y: 90 + index * 180,
     };
   });
 
@@ -187,6 +261,140 @@ export function buildImportedFlowchart(script: ImportedScriptPayload): BobarFlow
   };
 }
 
+export function buildImportedWorkspaceBlueprint(
+  raw: string | ImportedScriptPayload,
+  fallbackTitle = "Roteiro importado",
+): ImportedWorkspaceBlueprint {
+  const script =
+    typeof raw === "string" ? parseImportedScriptPayload(raw, fallbackTitle) : normalizeImportedScriptPayload(raw, fallbackTitle);
+  const flow = buildImportedFlowchart(script);
+
+  return {
+    title: script.titulo_da_tela || fallbackTitle,
+    columns: [
+      {
+        name: "Base estratégica",
+        cards: [
+          {
+            title: "Análise do tema",
+            card_type: "conteudo",
+            content_text: script.analise_do_tema,
+            note: "Importado automaticamente do agente.",
+          },
+          {
+            title: "Estratégia do vídeo",
+            card_type: "conteudo",
+            content_text: script.estrategia_do_video,
+            note: "Importado automaticamente do agente.",
+          },
+          {
+            title: "Formato do vídeo",
+            card_type: "conteudo",
+            content_text: script.formato_do_video,
+            note: "Importado automaticamente do agente.",
+          },
+        ],
+      },
+      {
+        name: "Gancho e execução",
+        cards: [
+          {
+            title: "Hooks",
+            card_type: "checklist",
+            content_text: toChecklistContent(script.hooks),
+            note: "Cards em lista para facilitar ajustes rápidos no quadro.",
+          },
+          {
+            title: "Roteiro segundo a segundo",
+            card_type: "fluxograma",
+            content_text: toTimelineText(script.roteiro_segundo_a_segundo),
+            note: "Importado como fluxograma editável do Bobar.",
+            structure_json: JSON.stringify(flow),
+          },
+          {
+            title: "Variações",
+            card_type: "checklist",
+            content_text: toChecklistContent(script.variacoes),
+            note: "Importado automaticamente do agente.",
+          },
+        ],
+      },
+      {
+        name: "Apoio de publicação",
+        cards: [
+          {
+            title: "Texto na tela",
+            card_type: "checklist",
+            content_text: toChecklistContent(script.texto_na_tela),
+            note: "Importado automaticamente do agente.",
+          },
+          {
+            title: "Legenda",
+            card_type: "conteudo",
+            content_text: script.legenda,
+            note: "Importado automaticamente do agente.",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export function readImportedWorkspaceMeta(raw: string | null | undefined): ImportedWorkspaceMeta | null {
+  const text = safeText(raw);
+  if (!text) return null;
+
+  try {
+    const parsed = JSON.parse(text);
+    const payload = parsed?.import_workspace;
+    if (!payload || typeof payload !== "object") return null;
+
+    const record = payload as Record<string, unknown>;
+    const column_ids = Array.isArray(record.column_ids)
+      ? record.column_ids
+          .map((item) => Number(item))
+          .filter((item) => Number.isFinite(item) && item > 0)
+      : [];
+
+    return {
+      version: Number(record.version || 1) || 1,
+      title: safeText(record.title) || "Roteiro importado",
+      column_ids,
+      created_at: safeText(record.created_at) || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeImportedWorkspaceMeta(
+  raw: string | null | undefined,
+  meta: ImportedWorkspaceMeta,
+): string {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const next = JSON.parse(safeText(raw) || "{}");
+    if (next && typeof next === "object" && !Array.isArray(next)) {
+      parsed = next as Record<string, unknown>;
+    }
+  } catch {
+    parsed = {};
+  }
+
+  parsed.import_workspace = {
+    version: meta.version || 1,
+    title: safeText(meta.title) || "Roteiro importado",
+    column_ids: (meta.column_ids || []).filter((item) => Number.isFinite(item) && item > 0),
+    created_at: safeText(meta.created_at) || new Date().toISOString(),
+  };
+
+  return JSON.stringify(parsed);
+}
+
+export function getImportedWorkspaceColumnIds(card?: Pick<BobarCard, "structure_json"> | null): number[] {
+  return readImportedWorkspaceMeta(card?.structure_json)?.column_ids || [];
+}
+
 export function buildAuthorityImportPayload(
   outputText: string,
   agent: { key: string; name: string },
@@ -199,6 +407,11 @@ export function buildAuthorityImportPayload(
     card_type: "roteiro",
     source_kind: `authority_agent_import:${agent.key}`,
     source_label: agent.name,
-    structure_json: JSON.stringify(buildImportedFlowchart(script)),
+    structure_json: writeImportedWorkspaceMeta("", {
+      version: 1,
+      title: script.titulo_da_tela || agent.name,
+      column_ids: [],
+      created_at: new Date().toISOString(),
+    }),
   };
 }

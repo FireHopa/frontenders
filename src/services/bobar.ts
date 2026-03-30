@@ -112,6 +112,9 @@ export const bobarService = {
   importCard: (payload: CreateBobarCardIn) =>
     http<BobarBoard>("/api/bobar/cards/import", { method: "POST", json: payload }),
 
+  cleanupImportDuplicates: (importCardId: number) =>
+    http<BobarBoard>(`/api/bobar/imports/${importCardId}/cleanup-duplicates`, { method: "POST" }),
+
   updateCard: (cardId: number, payload: UpdateBobarCardIn) =>
     http<BobarBoard>(`/api/bobar/cards/${cardId}`, { method: "PATCH", json: payload }),
 

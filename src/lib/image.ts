@@ -32,9 +32,30 @@ export async function fileToResizedDataUrl(
     const dataUrl = canvas.toDataURL(mime, quality);
     return dataUrl;
   } finally {
-    // revoke object url
     try {
       URL.revokeObjectURL((img as any).src);
     } catch {}
   }
+}
+
+export async function readImageDimensionsFromUrl(
+  url: string
+): Promise<{ width: number; height: number }> {
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({
+        width: img.naturalWidth || img.width || 1,
+        height: img.naturalHeight || img.height || 1,
+      });
+    };
+    img.onerror = () => reject(new Error("Não foi possível ler as dimensões da imagem."));
+    img.src = url;
+  });
+}
+
+export async function dataUrlToFile(dataUrl: string, filename = "image.png"): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || "image/png" });
 }

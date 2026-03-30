@@ -965,7 +965,7 @@ export default function AuthorityAgentRunPage() {
     setIsSendingToBobar(true);
     try {
       await bobarService.importCard(buildAuthorityImportPayload(result.output_text, agent));
-      toastSuccess("Resultado enviado para o Bobar.");
+      toastSuccess("Roteiro importado para o Bobar.");
     } catch (error) {
       toastApiError(error, "Não foi possível enviar este resultado para o Bobar");
     } finally {
